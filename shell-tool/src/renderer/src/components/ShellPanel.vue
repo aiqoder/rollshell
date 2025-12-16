@@ -39,6 +39,14 @@ const tabsWithNames = computed(() => {
   })
 })
 
+const sessionStatusMap = computed<Record<string, string | undefined>>(() => {
+  const map: Record<string, string | undefined> = {}
+  sessionStore.sessions.forEach((session) => {
+    map[session.id] = session.status
+  })
+  return map
+})
+
 // 获取活跃会话
 const activeSession = computed(() => sessionStore.activeSession)
 
@@ -63,6 +71,20 @@ async function handleTabDuplicate(tabId: string): Promise<void> {
   await sessionStore.createSession(session.connectionId)
 }
 
+async function handleTabConnect(tabId: string): Promise<void> {
+  const session = sessionStore.getSessionById(tabId)
+  if (!session) return
+  if (session.status === 'connected' || session.status === 'connecting') return
+
+  // 重新创建会话以尝试重连
+  await sessionStore.closeSession(tabId)
+  await sessionStore.createSession(session.connectionId)
+}
+
+async function handleTabDisconnect(tabId: string): Promise<void> {
+  await sessionStore.closeSession(tabId)
+}
+
 // Focus terminal when session changes
 watch(() => sessionStore.activeSessionId, () => {
   const id = sessionStore.activeSessionId
@@ -84,9 +106,12 @@ watch(() => sessionStore.activeSessionId, () => {
     <TabBar
       :tabs="tabsWithNames"
       :active-tab-id="sessionStore.activeSessionId"
+      :session-status-map="sessionStatusMap"
       @select="handleTabSelect"
       @close="handleTabClose"
       @duplicate="handleTabDuplicate"
+      @connect="handleTabConnect"
+      @disconnect="handleTabDisconnect"
     />
 
     <!-- 终端区域 - 需求: 4.1 -->

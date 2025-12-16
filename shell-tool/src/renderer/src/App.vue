@@ -9,6 +9,7 @@ import { useConnectionStore } from './stores/connectionStore'
 import { useSessionStore } from './stores/sessionStore'
 import { useThemeStore } from './stores/themeStore'
 import { ServerIcon, FolderIcon } from '@heroicons/vue/24/outline'
+import type { Connection } from '../shared'
 
 /**
  * App.vue - 主布局组件
@@ -29,6 +30,8 @@ const { themePreference } = storeToRefs(themeStore)
 // State
 const showAddDialog = ref(false)
 const addDialogSubmitResult = ref<{ success: boolean; errors?: string[] } | null>(null)
+const dialogMode = ref<'create' | 'edit'>('create')
+const dialogFormData = ref<Partial<Connection> & { id?: string } | null>(null)
 const activeSidePanel = ref<'connections' | 'files'>('connections')
 
 const themeLabel = computed(() => {
@@ -79,6 +82,8 @@ async function handleConnectionOpen(connectionId: string): Promise<void> {
  * 需求: 2.1
  */
 function handleAddConnection(): void {
+  dialogMode.value = 'create'
+  dialogFormData.value = null
   showAddDialog.value = true
   addDialogSubmitResult.value = null
   console.info('[App] 打开添加连接对话框')
@@ -90,6 +95,8 @@ function handleAddConnection(): void {
 function handleAddDialogClose(): void {
   showAddDialog.value = false
   addDialogSubmitResult.value = null
+  dialogFormData.value = null
+  dialogMode.value = 'create'
   console.info('[App] 关闭添加连接对话框')
 }
 
@@ -98,6 +105,7 @@ function handleAddDialogClose(): void {
  * 需求: 2.3
  */
 async function handleAddConnectionSubmit(data: {
+  id?: string
   name: string
   host: string
   port: number
@@ -110,13 +118,22 @@ async function handleAddConnectionSubmit(data: {
 }): Promise<void> {
   addDialogSubmitResult.value = null
   console.info('[App] 收到添加连接请求', sanitizeConnectionPayload(data))
-  const result = await connectionStore.addConnection(data)
+  let result
+  if (data.id) {
+    const { id, ...payload } = data
+    result = await connectionStore.updateConnection(id, payload)
+    console.info('[App] 更新连接请求完成', { id, success: result.success })
+  } else {
+    result = await connectionStore.addConnection(data)
+  }
   addDialogSubmitResult.value = result
   if (result.success) {
     showAddDialog.value = false
-    console.info('[App] 添加连接成功')
+    dialogFormData.value = null
+    dialogMode.value = 'create'
+    console.info('[App] 连接保存成功')
   } else {
-    console.error('[App] 添加连接失败', result.errors)
+    console.error('[App] 保存连接失败', result.errors)
   }
 }
 
@@ -132,6 +149,16 @@ async function handleDeleteConnection(connectionId: string): Promise<void> {
   }
   
   await connectionStore.deleteConnection(connectionId)
+}
+
+function handleEditConnection(connectionId: string): void {
+  const connection = connectionStore.getConnectionById(connectionId)
+  if (!connection) return
+  dialogMode.value = 'edit'
+  dialogFormData.value = { ...connection }
+  showAddDialog.value = true
+  addDialogSubmitResult.value = null
+  console.info('[App] 打开编辑连接对话框', { id: connectionId })
 }
 
 // ============================================
@@ -195,6 +222,7 @@ function handleThemeToggle(): void {
           @open="handleConnectionOpen"
           @add="handleAddConnection"
           @delete="handleDeleteConnection"
+          @edit="handleEditConnection"
         />
         <FilePanel v-else />
       </div>
@@ -211,6 +239,8 @@ function handleThemeToggle(): void {
     <!-- 添加连接对话框 - 需求: 2.1, 2.2 -->
     <AddConnectionDialog
       :visible="showAddDialog"
+      :mode="dialogMode"
+      :form-data="dialogFormData"
       :submit-result="addDialogSubmitResult"
       @close="handleAddDialogClose"
       @submit="handleAddConnectionSubmit"

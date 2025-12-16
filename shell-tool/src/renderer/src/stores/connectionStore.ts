@@ -194,6 +194,59 @@ export const useConnectionStore = defineStore('connection', () => {
     return connections.value.some((c) => c.id === id)
   }
 
+  /**
+   * 更新连接
+   */
+  async function updateConnection(
+    id: string,
+    data: Partial<Omit<Connection, 'id' | 'createdAt' | 'updatedAt'>>
+  ): Promise<{ success: boolean; errors: string[] }> {
+    const connectionAPI = getConnectionAPI()
+    if (!connectionAPI) {
+      const apiError = 'ShellTool API 未注入，无法更新连接'
+      console.error('[connectionStore] 更新连接失败 - API 不可用')
+      return { success: false, errors: [apiError] }
+    }
+
+    const existing = connections.value.find((c) => c.id === id)
+    if (!existing) {
+      return { success: false, errors: ['连接不存在'] }
+    }
+
+    const updated: Connection = {
+      ...existing,
+      ...data,
+      updatedAt: new Date(existing.updatedAt)
+    }
+    updated.updatedAt = new Date()
+
+    const validation = validateConnection(updated)
+    if (!validation.valid) {
+      console.warn('[connectionStore] 更新连接校验失败', {
+        errors: validation.errors,
+        payload: maskSensitiveFields(updated)
+      })
+      return { success: false, errors: validation.errors }
+    }
+
+    try {
+      console.info('[connectionStore] 发送更新连接请求', { id, payload: maskSensitiveFields(data) })
+      await connectionAPI.update(id, updated)
+      const index = connections.value.findIndex((c) => c.id === id)
+      if (index !== -1) {
+        connections.value.splice(index, 1, updated)
+      }
+      return { success: true, errors: [] }
+    } catch (e) {
+      const errorMsg = e instanceof Error ? e.message : '更新连接失败'
+      console.error('[connectionStore] 更新连接异常', {
+        error: errorMsg,
+        payload: maskSensitiveFields(updated)
+      })
+      return { success: false, errors: [errorMsg] }
+    }
+  }
+
   return {
     // State
     connections,
@@ -210,6 +263,7 @@ export const useConnectionStore = defineStore('connection', () => {
     deleteConnection,
     selectConnection,
     getConnectionById,
-    hasConnection
+    hasConnection,
+    updateConnection
   }
 })

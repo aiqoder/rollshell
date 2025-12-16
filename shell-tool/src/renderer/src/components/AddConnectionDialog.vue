@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { validateConnection } from '../../../shared'
-import type { AuthType } from '../../../shared'
+import type { AuthType, Connection } from '../../../shared'
 
 /**
  * AddConnectionDialog.vue - 添加 SSH 连接对话框组件
@@ -11,6 +11,8 @@ import type { AuthType } from '../../../shared'
 // Props
 interface Props {
   visible: boolean
+  mode?: 'create' | 'edit'
+  formData?: (Partial<Connection> & { id?: string }) | null
   submitResult?: {
     success: boolean
     errors?: string[]
@@ -47,6 +49,12 @@ const passphrase = ref('')
 const remark = ref('')
 const errors = ref<string[]>([])
 const isSubmitting = ref(false)
+const isEditMode = computed(() => props.mode === 'edit')
+const dialogTitle = computed(() => (isEditMode.value ? '编辑 SSH 连接' : '添加 SSH 连接'))
+const submitLabel = computed(() => {
+  if (isSubmitting.value) return isEditMode.value ? '保存中...' : '添加中...'
+  return isEditMode.value ? '保存' : '添加'
+})
 
 // Computed
 const hasErrors = computed(() => errors.value.length > 0)
@@ -58,7 +66,7 @@ watch(
   () => props.visible,
   (newVisible) => {
     if (newVisible) {
-      resetForm()
+      initializeForm()
     }
   }
 )
@@ -78,7 +86,39 @@ watch(
   }
 )
 
+watch(
+  () => props.formData,
+  (data) => {
+    if (props.visible && isEditMode.value && data) {
+      fillForm(data)
+    }
+  },
+  { deep: true }
+)
+
 // Methods
+function initializeForm(): void {
+  if (isEditMode.value && props.formData) {
+    fillForm(props.formData)
+  } else {
+    resetForm()
+  }
+}
+
+function fillForm(data: Partial<Connection>): void {
+  name.value = data.name || ''
+  host.value = data.host || ''
+  port.value = data.port ?? 22
+  username.value = data.username || ''
+  authType.value = data.authType || 'password'
+  password.value = data.password || ''
+  privateKeyPath.value = data.privateKeyPath || ''
+  passphrase.value = data.passphrase || ''
+  remark.value = data.remark || ''
+  errors.value = []
+  isSubmitting.value = false
+}
+
 function resetForm(): void {
   name.value = ''
   host.value = ''
@@ -100,6 +140,7 @@ function handleClose(): void {
 function handleSubmit(): void {
   // 构建连接数据
   const connectionData = {
+    id: isEditMode.value ? props.formData?.id : undefined,
     name: name.value.trim(),
     host: host.value.trim(),
     port: port.value,
@@ -112,6 +153,7 @@ function handleSubmit(): void {
   }
 
   const logPayload = {
+    id: connectionData.id,
     name: connectionData.name,
     host: connectionData.host,
     port: connectionData.port,
@@ -147,20 +189,17 @@ function clearErrors(): void {
   <!-- 对话框遮罩层 -->
   <Teleport to="body">
     <Transition name="fade">
-      <div
-        v-if="visible"
-        class="dialog-overlay fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm"
-      >
+      <div v-if="visible" class="dialog-wrapper fixed inset-0 z-50 flex items-start justify-center pointer-events-none">
         <!-- 对话框内容 - 需求: 2.2 -->
         <Transition name="scale">
           <div
             v-if="visible"
-            class="dialog-panel rounded-lg shadow-xl w-full max-w-md mx-4 overflow-hidden"
+            class="dialog-panel rounded-lg shadow-2xl w-full max-w-md mx-4 overflow-hidden pointer-events-auto"
             @click.stop
           >
             <!-- 对话框头部 -->
             <div class="dialog-header flex items-center justify-between px-6 py-4 border-b">
-              <h3 class="dialog-title text-lg font-semibold">添加 SSH 连接</h3>
+              <h3 class="dialog-title text-lg font-semibold">{{ dialogTitle }}</h3>
               <button
                 @click="handleClose"
                 class="dialog-icon-btn p-1 rounded-md transition-colors"
@@ -349,7 +388,7 @@ function clearErrors(): void {
                 :disabled="isSubmitting"
                 class="btn-primary px-4 py-2 text-sm font-medium rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {{ isSubmitting ? '添加中...' : '添加' }}
+                {{ submitLabel }}
               </button>
             </div>
           </div>
@@ -360,15 +399,16 @@ function clearErrors(): void {
 </template>
 
 <style scoped>
-.dialog-overlay {
-  background: var(--color-overlay);
+.dialog-wrapper {
+  padding-top: 48px;
+  align-items: flex-start;
 }
 
 .dialog-panel {
   background: var(--color-surface);
   color: var(--color-text-primary);
-  border: 1px solid var(--color-border);
-  box-shadow: 0 18px 40px var(--color-shadow);
+  border: 1px solid var(--color-border-strong);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
 }
 
 .dialog-header {
@@ -404,10 +444,10 @@ function clearErrors(): void {
 }
 
 .form-input {
-  background: var(--color-input-bg);
-  border: 1px solid var(--color-input-border);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
   color: var(--color-text-primary);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 
 .form-input:focus {

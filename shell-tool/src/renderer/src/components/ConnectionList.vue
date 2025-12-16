@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { Connection } from '../../../shared'
 
 /**
@@ -21,10 +21,17 @@ const emit = defineEmits<{
   (e: 'open', id: string): void
   (e: 'add'): void
   (e: 'delete', id: string): void
+  (e: 'edit', id: string): void
 }>()
 
 // Computed
 const isEmpty = computed(() => props.connections.length === 0)
+
+// Context menu state
+const showMenu = ref(false)
+const menuX = ref(0)
+const menuY = ref(0)
+const menuConnectionId = ref<string | null>(null)
 
 // Methods
 function handleSelect(id: string): void {
@@ -43,6 +50,48 @@ function handleDelete(id: string, event: Event): void {
   event.stopPropagation()
   emit('delete', id)
 }
+
+function openContextMenu(event: MouseEvent, id: string): void {
+  event.preventDefault()
+  menuConnectionId.value = id
+  menuX.value = event.clientX
+  menuY.value = event.clientY
+  showMenu.value = true
+}
+
+function hideContextMenu(): void {
+  showMenu.value = false
+  menuConnectionId.value = null
+}
+
+function handleGlobalClick(): void {
+  if (showMenu.value) {
+    hideContextMenu()
+  }
+}
+
+function handleEdit(id: string): void {
+  emit('edit', id)
+  hideContextMenu()
+}
+
+function handleOpenFromMenu(id: string): void {
+  emit('open', id)
+  hideContextMenu()
+}
+
+function handleDeleteFromMenu(id: string): void {
+  emit('delete', id)
+  hideContextMenu()
+}
+
+onMounted(() => {
+  window.addEventListener('click', handleGlobalClick)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('click', handleGlobalClick)
+})
 
 function isSelected(id: string): boolean {
   return props.selectedId === id
@@ -108,6 +157,7 @@ function isSelected(id: string): boolean {
           :key="connection.id"
           @click="handleSelect(connection.id)"
           @dblclick.stop="handleOpen(connection.id)"
+          @contextmenu="openContextMenu($event, connection.id)"
           :class="[
             'connection-item group flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors',
             isSelected(connection.id) ? 'is-active' : ''
@@ -158,6 +208,34 @@ function isSelected(id: string): boolean {
           </button>
         </li>
       </ul>
+    </div>
+
+    <!-- 右键菜单 -->
+    <div
+      v-if="showMenu && menuConnectionId"
+      class="context-menu fixed z-50 rounded shadow-lg w-40 py-1"
+      :style="{ top: `${menuY}px`, left: `${menuX}px` }"
+      @contextmenu.prevent
+    >
+      <button
+        class="context-menu__item w-full text-left px-3 py-2 text-sm transition-colors"
+        @click="handleOpenFromMenu(menuConnectionId)"
+      >
+        打开
+      </button>
+      <button
+        class="context-menu__item w-full text-left px-3 py-2 text-sm transition-colors"
+        @click="handleEdit(menuConnectionId)"
+      >
+        编辑
+      </button>
+      <div class="context-menu__divider" />
+      <button
+        class="context-menu__item w-full text-left px-3 py-2 text-sm transition-colors"
+        @click="handleDeleteFromMenu(menuConnectionId)"
+      >
+        删除
+      </button>
     </div>
   </div>
 </template>
@@ -243,5 +321,26 @@ function isSelected(id: string): boolean {
 .connection-item__delete.is-active:hover {
   background: rgba(255, 255, 255, 0.12);
   color: #ffffff;
+}
+
+.context-menu {
+  background-color: var(--color-menu-bg);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 12px 32px var(--color-shadow);
+}
+
+.context-menu__item {
+  color: inherit;
+}
+
+.context-menu__item:hover {
+  background: var(--color-menu-hover);
+}
+
+.context-menu__divider {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--color-border);
 }
 </style>
