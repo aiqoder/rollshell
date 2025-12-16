@@ -1,14 +1,19 @@
-import { app, shell, BrowserWindow } from 'electron'
+import { app, shell, BrowserWindow, screen } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { registerIPCHandlers } from './ipc'
 
 function createWindow(): void {
+  const { width: workWidth, height: workHeight } = screen.getPrimaryDisplay().workAreaSize
+  const defaultWidth = 1200
+  const defaultHeight = 800
+  const useFullScreen = workWidth < defaultWidth || workHeight < defaultHeight
+
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 900,
-    height: 670,
+    width: useFullScreen ? workWidth : defaultWidth,
+    height: useFullScreen ? workHeight : defaultHeight,
     show: false,
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
@@ -19,6 +24,9 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => {
+    if (useFullScreen) {
+      mainWindow.maximize()
+    }
     mainWindow.show()
   })
 

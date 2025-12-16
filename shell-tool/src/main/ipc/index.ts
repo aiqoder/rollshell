@@ -3,9 +3,9 @@
  * 负责注册所有主进程 IPC 处理器
  * 需求: 4.2, 6.3, 7.1, 7.2, 7.3
  */
-import { ipcMain, BrowserWindow } from 'electron'
-import { IPC_CHANNELS, type Connection } from '../../shared'
-import { getSSHManager, getConnectionStore } from '../services'
+import { ipcMain, BrowserWindow, dialog } from 'electron'
+import { IPC_CHANNELS, type Connection, type FileItem } from '../../shared'
+import { getSSHManager, getConnectionStore, getSFTPManager } from '../services'
 
 function sanitizeConnectionPayload(connection: Partial<Connection>): Record<string, unknown> {
   return {
@@ -21,6 +21,7 @@ function sanitizeConnectionPayload(connection: Partial<Connection>): Record<stri
 export function registerIPCHandlers(): void {
   registerSSHHandlers()
   registerConnectionHandlers()
+  registerFileHandlers()
 }
 
 /**
@@ -143,4 +144,74 @@ function registerConnectionHandlers(): void {
       throw error
     }
   })
+}
+
+/**
+ * 注册文件相关 IPC 处理器
+ */
+function registerFileHandlers(): void {
+  const sftpManager = getSFTPManager()
+
+  // 列表
+  ipcMain.handle(
+    IPC_CHANNELS.FILE_LIST,
+    async (_event, connectionId: string, remotePath: string): Promise<FileItem[]> => {
+      try {
+        return await sftpManager.list(connectionId, remotePath)
+      } catch (error) {
+        console.error('[IPC] file:list 错误:', error)
+        throw error
+      }
+    }
+  )
+
+  // 上传
+  ipcMain.handle(
+    IPC_CHANNELS.FILE_UPLOAD,
+    async (event, connectionId: string, localPath: string, remotePath: string) => {
+      const webContents = event.sender
+      await sftpManager.upload(
+        connectionId,
+        localPath,
+        remotePath,
+        (transferred, total, filename) => {
+          const percent = total > 0 ? transferred / total : 0
+          webContents.send(IPC_CHANNELS.FILE_PROGRESS, connectionId, {
+            type: 'upload',
+            path: remotePath,
+            filename,
+            percent
+          })
+        }
+      )
+    }
+  )
+
+  // 下载：主进程负责展示保存对话框
+  ipcMain.handle(
+    IPC_CHANNELS.FILE_DOWNLOAD,
+    async (event, connectionId: string, remotePath: string, suggestedName?: string) => {
+      const browserWindow = BrowserWindow.fromWebContents(event.sender) || undefined
+      const result = await dialog.showSaveDialog(browserWindow, {
+        defaultPath: suggestedName ?? undefined
+      })
+      if (result.canceled || !result.filePath) return
+
+      const localPath = result.filePath
+      const webContents = event.sender
+      await sftpManager.download(
+        connectionId,
+        remotePath,
+        localPath,
+        (percent, filename) => {
+          webContents.send(IPC_CHANNELS.FILE_PROGRESS, connectionId, {
+            type: 'download',
+            path: remotePath,
+            filename,
+            percent
+          })
+        }
+      )
+    }
+  )
 }

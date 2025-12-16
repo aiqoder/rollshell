@@ -72,7 +72,13 @@ export const IPC_CHANNELS = {
   CONNECTION_GET_ALL: 'connection:get-all',
   CONNECTION_ADD: 'connection:add',
   CONNECTION_UPDATE: 'connection:update',
-  CONNECTION_DELETE: 'connection:delete'
+  CONNECTION_DELETE: 'connection:delete',
+
+  // 文件相关通道
+  FILE_LIST: 'file:list',
+  FILE_UPLOAD: 'file:upload',
+  FILE_DOWNLOAD: 'file:download',
+  FILE_PROGRESS: 'file:progress'
 } as const
 
 /**
@@ -81,6 +87,10 @@ export const IPC_CHANNELS = {
 export interface IPCMainToRenderer {
   'ssh:data': (sessionId: string, data: string) => void
   'ssh:exit': (sessionId: string, code: number) => void
+  'file:progress': (
+    connectionId: string,
+    payload: { type: 'upload' | 'download'; path: string; filename: string; percent: number }
+  ) => void
 }
 
 /**
@@ -96,6 +106,22 @@ export interface IPCRendererToMain {
   'connection:add': (connection: Connection) => Promise<void>
   'connection:update': (id: string, data: Partial<Connection>) => Promise<void>
   'connection:delete': (id: string) => Promise<void>
+
+  'file:list': (connectionId: string, remotePath: string) => Promise<FileItem[]>
+  'file:upload': (
+    connectionId: string,
+    localPath: string,
+    remotePath: string
+  ) => Promise<void>
+  'file:download': (connectionId: string, remotePath: string, localPath: string) => Promise<void>
+}
+
+export interface FileItem {
+  name: string
+  path: string
+  isDirectory: boolean
+  size: number
+  modifiedAt?: Date
 }
 
 /**

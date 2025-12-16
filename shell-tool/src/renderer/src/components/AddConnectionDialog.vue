@@ -149,21 +149,21 @@ function clearErrors(): void {
     <Transition name="fade">
       <div
         v-if="visible"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+        class="dialog-overlay fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm"
       >
         <!-- 对话框内容 - 需求: 2.2 -->
         <Transition name="scale">
           <div
             v-if="visible"
-            class="bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4 overflow-hidden"
+            class="dialog-panel rounded-lg shadow-xl w-full max-w-md mx-4 overflow-hidden"
             @click.stop
           >
             <!-- 对话框头部 -->
-            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700">
-              <h3 class="text-lg font-semibold text-white">添加 SSH 连接</h3>
+            <div class="dialog-header flex items-center justify-between px-6 py-4 border-b">
+              <h3 class="dialog-title text-lg font-semibold">添加 SSH 连接</h3>
               <button
                 @click="handleClose"
-                class="p-1 rounded-md hover:bg-gray-700 transition-colors text-gray-400 hover:text-white"
+                class="dialog-icon-btn p-1 rounded-md transition-colors"
                 aria-label="关闭"
               >
                 <svg
@@ -188,7 +188,7 @@ function clearErrors(): void {
               <!-- 错误提示 - 需求: 2.4 -->
               <div
                 v-if="hasErrors"
-                class="p-3 bg-red-900/50 border border-red-700 rounded-md text-red-300 text-sm"
+                class="dialog-error p-3 rounded-md text-sm"
               >
                 <ul class="list-disc list-inside space-y-1">
                   <li v-for="(error, index) in errors" :key="index">{{ error }}</li>
@@ -197,7 +197,7 @@ function clearErrors(): void {
 
               <!-- 连接名称（必填） -->
               <div>
-                <label for="connection-name" class="block text-sm font-medium text-gray-300 mb-1">
+                <label for="connection-name" class="form-label block text-sm font-medium mb-1">
                   连接名称 <span class="text-red-400">*</span>
                 </label>
                 <input
@@ -205,7 +205,7 @@ function clearErrors(): void {
                   v-model="name"
                   type="text"
                   placeholder="例如：生产服务器"
-                  class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  class="form-input w-full px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   @input="clearErrors"
                   autofocus
                 />
@@ -214,7 +214,7 @@ function clearErrors(): void {
               <!-- 主机和端口 -->
               <div class="grid grid-cols-3 gap-3">
                 <div class="col-span-2">
-                  <label for="connection-host" class="block text-sm font-medium text-gray-300 mb-1">
+                  <label for="connection-host" class="form-label block text-sm font-medium mb-1">
                     主机 <span class="text-red-400">*</span>
                   </label>
                   <input
@@ -222,12 +222,12 @@ function clearErrors(): void {
                     v-model="host"
                     type="text"
                     placeholder="例如：192.168.1.100"
-                    class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    class="form-input w-full px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     @input="clearErrors"
                   />
                 </div>
                 <div>
-                  <label for="connection-port" class="block text-sm font-medium text-gray-300 mb-1">
+                  <label for="connection-port" class="form-label block text-sm font-medium mb-1">
                     端口 <span class="text-red-400">*</span>
                   </label>
                   <input
@@ -236,7 +236,7 @@ function clearErrors(): void {
                     type="number"
                     min="1"
                     max="65535"
-                    class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    class="form-input w-full px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     @input="clearErrors"
                   />
                 </div>
@@ -244,7 +244,7 @@ function clearErrors(): void {
 
               <!-- 用户名（必填） -->
               <div>
-                <label for="connection-username" class="block text-sm font-medium text-gray-300 mb-1">
+                <label for="connection-username" class="form-label block text-sm font-medium mb-1">
                   用户名 <span class="text-red-400">*</span>
                 </label>
                 <input
@@ -252,20 +252,20 @@ function clearErrors(): void {
                   v-model="username"
                   type="text"
                   placeholder="例如：root"
-                  class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  class="form-input w-full px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   @input="clearErrors"
                 />
               </div>
 
               <!-- 认证方式（必填） -->
               <div>
-                <label for="connection-auth-type" class="block text-sm font-medium text-gray-300 mb-1">
+                <label for="connection-auth-type" class="form-label block text-sm font-medium mb-1">
                   认证方式 <span class="text-red-400">*</span>
                 </label>
                 <select
                   id="connection-auth-type"
                   v-model="authType"
-                  class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  class="form-input w-full px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   @change="clearErrors"
                 >
                   <option value="password">密码</option>
@@ -275,7 +275,7 @@ function clearErrors(): void {
 
               <!-- 密码（密码认证时必填） -->
               <div v-if="isPasswordAuth">
-                <label for="connection-password" class="block text-sm font-medium text-gray-300 mb-1">
+                <label for="connection-password" class="form-label block text-sm font-medium mb-1">
                   密码 <span class="text-red-400">*</span>
                 </label>
                 <input
@@ -283,14 +283,14 @@ function clearErrors(): void {
                   v-model="password"
                   type="password"
                   placeholder="请输入密码"
-                  class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  class="form-input w-full px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   @input="clearErrors"
                 />
               </div>
 
               <!-- 私钥路径（公钥认证时必填） -->
               <div v-if="isPublicKeyAuth">
-                <label for="connection-private-key" class="block text-sm font-medium text-gray-300 mb-1">
+                <label for="connection-private-key" class="form-label block text-sm font-medium mb-1">
                   私钥路径 <span class="text-red-400">*</span>
                 </label>
                 <input
@@ -298,48 +298,48 @@ function clearErrors(): void {
                   v-model="privateKeyPath"
                   type="text"
                   placeholder="例如：~/.ssh/id_rsa"
-                  class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  class="form-input w-full px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   @input="clearErrors"
                 />
               </div>
 
               <!-- 私钥密码（公钥认证时可选） -->
               <div v-if="isPublicKeyAuth">
-                <label for="connection-passphrase" class="block text-sm font-medium text-gray-300 mb-1">
+                <label for="connection-passphrase" class="form-label block text-sm font-medium mb-1">
                   私钥密码
-                  <span class="text-gray-500 font-normal">（可选）</span>
+                  <span class="form-hint font-normal text-sm">（可选）</span>
                 </label>
                 <input
                   id="connection-passphrase"
                   v-model="passphrase"
                   type="password"
                   placeholder="如果私钥有密码，请输入"
-                  class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  class="form-input w-full px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
 
               <!-- 备注（可选） -->
               <div>
-                <label for="connection-remark" class="block text-sm font-medium text-gray-300 mb-1">
+                <label for="connection-remark" class="form-label block text-sm font-medium mb-1">
                   备注
-                  <span class="text-gray-500 font-normal">（可选）</span>
+                  <span class="form-hint text-sm font-normal">（可选）</span>
                 </label>
                 <textarea
                   id="connection-remark"
                   v-model="remark"
                   rows="2"
                   placeholder="添加连接备注信息"
-                  class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  class="form-input w-full px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                 ></textarea>
               </div>
             </form>
 
             <!-- 对话框底部按钮 -->
-            <div class="flex justify-end gap-3 px-6 py-4 border-t border-gray-700 bg-gray-850">
+            <div class="dialog-footer flex justify-end gap-3 px-6 py-4 border-t">
               <button
                 type="button"
                 @click="handleClose"
-                class="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white bg-gray-700 hover:bg-gray-600 rounded-md transition-colors"
+                class="btn-secondary px-4 py-2 text-sm font-medium rounded-md transition-colors"
               >
                 取消
               </button>
@@ -347,7 +347,7 @@ function clearErrors(): void {
                 type="submit"
                 @click="handleSubmit"
                 :disabled="isSubmitting"
-                class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                class="btn-primary px-4 py-2 text-sm font-medium rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {{ isSubmitting ? '添加中...' : '添加' }}
               </button>
@@ -360,6 +360,99 @@ function clearErrors(): void {
 </template>
 
 <style scoped>
+.dialog-overlay {
+  background: var(--color-overlay);
+}
+
+.dialog-panel {
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 18px 40px var(--color-shadow);
+}
+
+.dialog-header {
+  border-color: var(--color-border);
+}
+
+.dialog-title {
+  color: var(--color-text-primary);
+}
+
+.dialog-icon-btn {
+  color: var(--color-text-muted);
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.dialog-icon-btn:hover {
+  color: var(--color-text-primary);
+  background: var(--color-surface-strong);
+}
+
+.dialog-error {
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border);
+  color: var(--color-danger-text);
+}
+
+.form-label {
+  color: var(--color-text-secondary);
+}
+
+.form-hint {
+  color: var(--color-text-muted);
+}
+
+.form-input {
+  background: var(--color-input-bg);
+  border: 1px solid var(--color-input-border);
+  color: var(--color-text-primary);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form-input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 35%, transparent);
+}
+
+.dialog-footer {
+  border-color: var(--color-border);
+  background: var(--color-surface-muted);
+}
+
+.btn-secondary {
+  color: var(--color-text-secondary);
+  background: var(--color-surface-muted);
+}
+
+.btn-secondary:hover {
+  color: var(--color-text-primary);
+  background: var(--color-surface-strong);
+}
+
+.btn-primary {
+  background: var(--color-primary);
+  color: #ffffff;
+}
+
+.btn-primary:hover {
+  background: var(--color-primary-hover);
+}
+
+/* 亮色主题下使用更深的蓝色以确保对比度 */
+:root:not([data-theme='dark']) .btn-primary {
+  background: #1d4ed8;
+}
+
+:root:not([data-theme='dark']) .btn-primary:hover {
+  background: #1e40af;
+}
+
+.btn-primary:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
 /* 淡入淡出动画 */
 .fade-enter-active,
 .fade-leave-active {

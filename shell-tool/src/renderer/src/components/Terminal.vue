@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, watch, nextTick, computed } from 'vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
+import { useThemeStore } from '../stores/themeStore'
 
 /**
  * Terminal.vue - 终端组件
@@ -30,10 +31,19 @@ const terminalRef = ref<HTMLDivElement | null>(null)
 let terminal: Terminal | null = null
 let fitAddon: FitAddon | null = null
 let resizeObserver: ResizeObserver | null = null
+let selectionListener: { dispose: () => void } | null = null
 let dataUnsubscribe: (() => void) | null = null
 let exitUnsubscribe: (() => void) | null = null
 let connectingTimer: number | null = null
 let connectingSeconds = 0
+const themeStore = useThemeStore()
+const terminalTheme = computed(() => themeStore.getTerminalTheme())
+const hasSelection = ref(false)
+const contextMenuState = ref<{ visible: boolean; x: number; y: number }>({
+  visible: false,
+  x: 0,
+  y: 0
+})
 
 function startConnectingTimer(): void {
   if (!terminal) return
@@ -96,21 +106,7 @@ function initTerminal(): void {
     cursorBlink: true,
     fontSize: 14,
     fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-    theme: {
-      background: '#1a1a2e',
-      foreground: '#eaeaea',
-      cursor: '#f8f8f2',
-      cursorAccent: '#1a1a2e',
-      selectionBackground: '#44475a',
-      black: '#21222c',
-      red: '#ff5555',
-      green: '#50fa7b',
-      yellow: '#f1fa8c',
-      blue: '#bd93f9',
-      magenta: '#ff79c6',
-      cyan: '#8be9fd',
-      white: '#f8f8f2',
-    },
+    theme: terminalTheme.value,
     allowProposedApi: true
   })
 
@@ -143,6 +139,11 @@ function initTerminal(): void {
     }
   })
 
+  // 监听选择变化以更新菜单可用状态
+  selectionListener = terminal.onSelectionChange(() => {
+    hasSelection.value = !!terminal?.getSelection()
+  })
+
   // Setup resize observer for auto-fit
   resizeObserver = new ResizeObserver(() => {
     if (fitAddon && terminal) {
@@ -171,6 +172,10 @@ function cleanupTerminal(): void {
     dataUnsubscribe()
     dataUnsubscribe = null
   }
+  if (selectionListener) {
+    selectionListener.dispose()
+    selectionListener = null
+  }
   if (exitUnsubscribe) {
     exitUnsubscribe()
     exitUnsubscribe = null
@@ -188,6 +193,13 @@ function cleanupTerminal(): void {
   pendingEcho = ''
 }
 
+function applyTerminalTheme(): void {
+  if (terminal) {
+    terminal.options.theme = terminalTheme.value
+    terminal.refresh(0, terminal.rows - 1)
+  }
+}
+
 // Focus terminal
 function focus(): void {
   terminal?.focus()
@@ -196,13 +208,84 @@ function focus(): void {
 // Expose focus method
 defineExpose({ focus })
 
+function refreshSelectionState(): void {
+  hasSelection.value = !!terminal?.getSelection()
+}
+
+function hideContextMenu(): void {
+  contextMenuState.value.visible = false
+}
+
+async function copySelection(): Promise<void> {
+  refreshSelectionState()
+  if (!hasSelection.value) return
+  const text = terminal?.getSelection()
+  if (!text) return
+  try {
+    await navigator.clipboard.writeText(text)
+  } catch (error) {
+    console.error('[Terminal] 写入剪贴板失败', error)
+  } finally {
+    hideContextMenu()
+  }
+}
+
+function sendInput(text: string): void {
+  if (!text) return
+  if (props.status === 'connected' && props.sshSessionId) {
+    window.shellTool?.ssh?.write(props.sshSessionId, text)
+  }
+}
+
+async function pasteFromClipboard(): Promise<void> {
+  try {
+    const text = await navigator.clipboard.readText()
+    sendInput(text)
+  } catch (error) {
+    console.error('[Terminal] 读取剪贴板失败', error)
+  } finally {
+    hideContextMenu()
+  }
+}
+
+function pasteSelection(): void {
+  refreshSelectionState()
+  if (!hasSelection.value) return
+  const text = terminal?.getSelection()
+  if (text) {
+    sendInput(text)
+  }
+  hideContextMenu()
+}
+
+function clearTerminal(): void {
+  terminal?.clear()
+  hasSelection.value = false
+  if (props.status === 'connected' && props.sshSessionId) {
+    window.shellTool?.ssh?.write(props.sshSessionId, 'clear\n')
+  }
+  hideContextMenu()
+}
+
+function handleContextMenu(event: MouseEvent): void {
+  event.preventDefault()
+  refreshSelectionState()
+  contextMenuState.value = {
+    visible: true,
+    x: event.clientX,
+    y: event.clientY
+  }
+}
+
 // Lifecycle
 onMounted(() => {
   initTerminal()
+  document.addEventListener('click', hideContextMenu)
 })
 
 onUnmounted(() => {
   cleanupTerminal()
+  document.removeEventListener('click', hideContextMenu)
 })
 
 // Watch for sshSessionId changes (session switch)
@@ -232,18 +315,45 @@ watch(
     }
   }
 )
+
+watch(terminalTheme, () => {
+  applyTerminalTheme()
+})
 </script>
 
 <template>
-  <div
-    ref="terminalRef"
-    class="terminal-container w-full h-full bg-[#1a1a2e]"
-  />
+  <div class="terminal-wrapper" @contextmenu="handleContextMenu">
+    <div
+      ref="terminalRef"
+      class="terminal-container w-full h-full"
+    />
+
+    <div
+      v-if="contextMenuState.visible"
+      class="terminal-context-menu"
+      :style="{ top: `${contextMenuState.y}px`, left: `${contextMenuState.x}px` }"
+      @click.stop
+      @contextmenu.prevent
+    >
+      <button class="ctx-item" :disabled="!hasSelection" @click="copySelection">复制</button>
+      <button class="ctx-item" @click="pasteFromClipboard">粘贴</button>
+      <button class="ctx-item" :disabled="!hasSelection" @click="pasteSelection">粘贴选中</button>
+      <button class="ctx-item" @click="clearTerminal">清空缓存</button>
+    </div>
+  </div>
 </template>
 
 <style scoped>
+.terminal-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
 .terminal-container {
   padding: 4px;
+  background: var(--terminal-bg);
+  color: var(--terminal-fg);
 }
 
 .terminal-container :deep(.xterm) {
@@ -252,5 +362,36 @@ watch(
 
 .terminal-container :deep(.xterm-viewport) {
   overflow-y: auto;
+}
+
+.terminal-context-menu {
+  position: fixed;
+  z-index: 20;
+  background: var(--color-surface, #2d2d3a);
+  border: 1px solid var(--color-border-strong, #444);
+  border-radius: 6px;
+  padding: 6px 0;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  min-width: 140px;
+}
+
+.ctx-item {
+  width: 100%;
+  padding: 8px 14px;
+  text-align: left;
+  color: var(--color-text-primary, #f5f5f5);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.ctx-item:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ctx-item:disabled {
+  color: var(--color-text-muted, #7a7a84);
+  cursor: not-allowed;
 }
 </style>

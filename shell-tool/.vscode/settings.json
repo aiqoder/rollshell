@@ -7,5 +7,9 @@
   },
   "[json]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
-  }
+  },
+  "http.proxy": "socks5://127.0.0.1:7897",  // 替换为你的代理地址和端口
+  "http.proxyStrictSSL": false,              // 关闭严格SSL验证
+  "http.proxySupport": "override",           // 强制启用代理
+  "cursor.general.disableHttp2": true        // 禁用HTTP/2（关键！）
 }

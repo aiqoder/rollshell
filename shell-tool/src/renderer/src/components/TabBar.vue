@@ -86,11 +86,11 @@ function isActive(tabId: string): boolean {
 </script>
 
 <template>
-  <div class="tab-bar flex items-center bg-gray-800 border-b border-gray-700 py-1">
+  <div class="tab-bar flex items-center border-b py-1">
     <!-- 标签页列表 - 需求: 4.4, 5.1 -->
     <div class="flex-1 flex flex-wrap items-center">
       <!-- 空状态 -->
-      <div v-if="isEmpty" class="px-4 text-sm text-gray-500">
+      <div v-if="isEmpty" class="px-4 text-sm tab-empty">
         选择连接以打开终端
       </div>
 
@@ -101,10 +101,8 @@ function isActive(tabId: string): boolean {
         @click="handleSelect(tab.id)"
         @contextmenu="openContextMenu($event, tab.id)"
         :class="[
-          'group flex items-center gap-2 px-3 h-full cursor-pointer border-r border-gray-700 transition-colors min-w-0 select-none',
-          isActive(tab.id)
-            ? 'bg-gray-900 text-white'
-            : 'bg-gray-800 text-gray-400 hover:bg-gray-750 hover:text-gray-300'
+          'tab-item group flex items-center gap-2 px-3 h-full cursor-pointer border-r transition-colors min-w-0 select-none',
+          isActive(tab.id) ? 'is-active' : ''
         ]"
       >
         <!-- 终端图标 -->
@@ -129,7 +127,7 @@ function isActive(tabId: string): boolean {
         <!-- 关闭按钮 - 需求: 5.3 -->
         <button
           @click="handleClose(tab.id, $event)"
-          class="p-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-600"
+          class="tab-close p-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity"
           :class="isActive(tab.id) ? 'opacity-100' : ''"
           title="关闭标签页"
           aria-label="关闭标签页"
@@ -155,18 +153,18 @@ function isActive(tabId: string): boolean {
     <!-- 右键菜单 -->
     <div
       v-if="showMenu && menuTabId"
-      class="fixed z-50 bg-gray-800 text-gray-100 rounded shadow-lg border border-gray-700 w-36 py-1"
+      class="context-menu fixed z-50 rounded shadow-lg w-36 py-1"
       :style="{ top: `${menuY}px`, left: `${menuX}px` }"
       @contextmenu.prevent
     >
       <button
-        class="w-full text-left px-3 py-2 text-sm hover:bg-gray-700 transition-colors"
+        class="context-menu__item w-full text-left px-3 py-2 text-sm transition-colors"
         @click="handleDuplicate"
       >
         复制标签
       </button>
       <button
-        class="w-full text-left px-3 py-2 text-sm hover:bg-gray-700 transition-colors"
+        class="context-menu__item w-full text-left px-3 py-2 text-sm transition-colors"
         @click="handleCloseFromMenu"
       >
         关闭
@@ -175,3 +173,59 @@ function isActive(tabId: string): boolean {
 
   </div>
 </template>
+
+<style scoped>
+.tab-bar {
+  background: var(--color-surface-muted);
+  border-color: var(--color-border);
+  color: var(--color-text-secondary);
+}
+
+.tab-empty {
+  color: var(--color-text-muted);
+}
+
+.tab-item {
+  background: var(--color-surface-muted);
+  color: var(--color-text-secondary);
+  border-color: var(--color-border);
+}
+
+.tab-item:hover {
+  background: var(--color-surface-strong);
+  color: var(--color-text-primary);
+}
+
+.tab-item.is-active {
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+.tab-item .tab-close {
+  color: var(--color-text-muted);
+}
+
+.tab-item .tab-close:hover {
+  background: var(--color-surface-strong);
+  color: var(--color-text-primary);
+}
+
+.tab-item.is-active .tab-close {
+  color: var(--color-text-primary);
+}
+
+.context-menu {
+  background: var(--color-menu-bg);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 10px 30px var(--color-shadow);
+}
+
+.context-menu__item {
+  color: inherit;
+}
+
+.context-menu__item:hover {
+  background: var(--color-menu-hover);
+}
+</style>

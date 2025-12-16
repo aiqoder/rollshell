@@ -50,14 +50,14 @@ function isSelected(id: string): boolean {
 </script>
 
 <template>
-  <div class="connection-list flex flex-col h-full bg-gray-900 text-white">
+  <div class="connection-list flex flex-col h-full">
     <!-- 头部：标题和添加按钮 -->
-    <div class="flex items-center justify-between px-4 py-3 border-b border-gray-700">
-      <h2 class="text-sm font-semibold text-gray-300">连接列表</h2>
+    <div class="connection-list__header flex items-center justify-between px-4 py-3 border-b">
+      <h2 class="text-sm font-semibold">连接列表</h2>
       <!-- 添加按钮 - 需求: 2.1 -->
       <button
         @click="handleAdd"
-        class="p-1.5 rounded-md hover:bg-gray-700 transition-colors text-gray-400 hover:text-white"
+        class="connection-list__add p-1.5 rounded-md transition-colors"
         title="添加连接"
         aria-label="添加连接"
       >
@@ -81,11 +81,11 @@ function isSelected(id: string): boolean {
       <!-- 空状态提示 - 需求: 1.2 -->
       <div
         v-if="isEmpty"
-        class="flex flex-col items-center justify-center h-full px-4 py-8 text-center"
+        class="connection-list__empty flex flex-col items-center justify-center h-full px-4 py-8 text-center"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
-          class="h-12 w-12 text-gray-600 mb-3"
+          class="h-12 w-12 mb-3 connection-list__empty-icon"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -97,8 +97,8 @@ function isSelected(id: string): boolean {
             d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
           />
         </svg>
-        <p class="text-gray-500 text-sm mb-2">暂无连接</p>
-        <p class="text-gray-600 text-xs">点击上方 + 按钮添加新连接</p>
+        <p class="text-sm mb-2 connection-list__empty-title">暂无连接</p>
+        <p class="text-xs connection-list__empty-desc">点击上方 + 按钮添加新连接</p>
       </div>
 
       <!-- 连接列表 - 需求: 1.3 -->
@@ -107,20 +107,18 @@ function isSelected(id: string): boolean {
           v-for="connection in connections"
           :key="connection.id"
           @click="handleSelect(connection.id)"
-          @dblclick="handleOpen(connection.id)"
+          @dblclick.stop="handleOpen(connection.id)"
           :class="[
-            'group flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors',
-            isSelected(connection.id)
-              ? 'bg-blue-600 text-white'
-              : 'hover:bg-gray-800 text-gray-300'
+            'connection-item group flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors',
+            isSelected(connection.id) ? 'is-active' : ''
           ]"
         >
           <!-- 连接图标和名称 -->
           <div class="flex items-center gap-3 min-w-0">
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              class="h-4 w-4 flex-shrink-0"
-              :class="isSelected(connection.id) ? 'text-white' : 'text-gray-500'"
+              class="h-4 w-4 flex-shrink-0 connection-item__icon"
+              :class="isSelected(connection.id) ? 'is-active' : ''"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -132,18 +130,14 @@ function isSelected(id: string): boolean {
                 d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
               />
             </svg>
-            <span class="truncate text-sm">{{ connection.name }}</span>
+            <span class="truncate text-sm connection-item__name">{{ connection.name }}</span>
           </div>
 
           <!-- 删除按钮 -->
           <button
             @click="handleDelete(connection.id, $event)"
-            class="p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-            :class="
-              isSelected(connection.id)
-                ? 'hover:bg-blue-500 text-white'
-                : 'hover:bg-gray-700 text-gray-500 hover:text-gray-300'
-            "
+            class="connection-item__delete p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+            :class="isSelected(connection.id) ? 'is-active' : ''"
             title="删除连接"
             aria-label="删除连接"
           >
@@ -167,3 +161,87 @@ function isSelected(id: string): boolean {
     </div>
   </div>
 </template>
+
+<style scoped>
+.connection-list {
+  background: var(--color-surface-muted);
+  color: var(--color-text-primary);
+}
+
+.connection-list__header {
+  border-color: var(--color-border);
+  color: var(--color-text-secondary);
+}
+
+.connection-list__add {
+  color: var(--color-text-muted);
+}
+
+.connection-list__add:hover {
+  color: var(--color-text-primary);
+  background: var(--color-surface-strong);
+}
+
+.connection-list__empty {
+  color: var(--color-text-secondary);
+}
+
+.connection-list__empty-icon {
+  color: var(--color-text-muted);
+}
+
+.connection-list__empty-desc {
+  color: var(--color-text-muted);
+}
+
+.connection-item {
+  color: var(--color-text-secondary);
+  border-radius: 0.5rem;
+}
+
+.connection-item:hover {
+  background: var(--color-surface-strong);
+  color: var(--color-text-primary);
+}
+
+.connection-item.is-active {
+  background: var(--color-primary);
+  color: #ffffff;
+}
+
+/* 亮色主题下使用更深的蓝色以确保对比度 */
+:root:not([data-theme='dark']) .connection-item.is-active {
+  background: #1d4ed8;
+  color: #ffffff;
+}
+
+.connection-item__icon {
+  color: var(--color-text-muted);
+}
+
+.connection-item__icon.is-active {
+  color: #ffffff;
+}
+
+.connection-item__name {
+  color: inherit;
+}
+
+.connection-item.is-active .connection-item__name {
+  color: #ffffff;
+}
+
+.connection-item__delete {
+  color: var(--color-text-muted);
+}
+
+.connection-item__delete:hover {
+  background: var(--color-surface-strong);
+  color: var(--color-text-primary);
+}
+
+.connection-item__delete.is-active:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+</style>

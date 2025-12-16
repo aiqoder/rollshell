@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import { IPC_CHANNELS, type Connection } from '../shared'
+import { IPC_CHANNELS, type Connection, type FileItem } from '../shared'
 
 /**
  * Shell Tool API
@@ -66,6 +66,39 @@ const shellToolAPI = {
      */
     delete: (id: string): Promise<void> => {
       return ipcRenderer.invoke(IPC_CHANNELS.CONNECTION_DELETE, id)
+    }
+  },
+
+  /**
+   * 文件管理相关 API
+   */
+  file: {
+    list: (connectionId: string, remotePath: string): Promise<FileItem[]> => {
+      return ipcRenderer.invoke(IPC_CHANNELS.FILE_LIST, connectionId, remotePath)
+    },
+    upload: (connectionId: string, localPath: string, remotePath: string): Promise<void> => {
+      return ipcRenderer.invoke(IPC_CHANNELS.FILE_UPLOAD, connectionId, localPath, remotePath)
+    },
+    download: (
+      connectionId: string,
+      remotePath: string,
+      suggestedName?: string
+    ): Promise<void> => {
+      return ipcRenderer.invoke(IPC_CHANNELS.FILE_DOWNLOAD, connectionId, remotePath, suggestedName)
+    },
+    onProgress: (
+      callback: (
+        connectionId: string,
+        payload: { type: 'upload' | 'download'; path: string; filename: string; percent: number }
+      ) => void
+    ): (() => void) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        connectionId: string,
+        payload: { type: 'upload' | 'download'; path: string; filename: string; percent: number }
+      ): void => callback(connectionId, payload)
+      ipcRenderer.on(IPC_CHANNELS.FILE_PROGRESS, handler)
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.FILE_PROGRESS, handler)
     }
   }
 }

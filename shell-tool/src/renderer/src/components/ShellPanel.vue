@@ -4,6 +4,7 @@ import TabBar from './TabBar.vue'
 import Terminal from './Terminal.vue'
 import { useSessionStore } from '../stores/sessionStore'
 import { useConnectionStore } from '../stores/connectionStore'
+import { useFileStore } from '../stores'
 
 /**
  * ShellPanel.vue - Shell 面板容器组件
@@ -13,6 +14,7 @@ import { useConnectionStore } from '../stores/connectionStore'
 // Stores
 const sessionStore = useSessionStore()
 const connectionStore = useConnectionStore()
+const fileStore = useFileStore()
 
 // Refs
 const terminalRefs = ref<Record<string, InstanceType<typeof Terminal> | null>>({})
@@ -64,14 +66,20 @@ async function handleTabDuplicate(tabId: string): Promise<void> {
 // Focus terminal when session changes
 watch(() => sessionStore.activeSessionId, () => {
   const id = sessionStore.activeSessionId
-  if (!id) return
-  const term = terminalRefs.value[id]
-  term?.focus()
+  const session = id ? sessionStore.getSessionById(id) : null
+  if (session) {
+    fileStore.setConnection(session.connectionId, '~')
+    fileStore.load(fileStore.currentPath)
+    const term = terminalRefs.value[id]
+    term?.focus()
+  } else {
+    fileStore.setConnection(null)
+  }
 })
 </script>
 
 <template>
-  <div class="shell-panel flex flex-col h-full bg-gray-900">
+  <div class="shell-panel flex flex-col h-full">
     <!-- 标签栏 - 需求: 4.4 -->
     <TabBar
       :tabs="tabsWithNames"
@@ -97,11 +105,11 @@ watch(() => sessionStore.activeSessionId, () => {
       <!-- 无会话时显示空状态 -->
       <div
         v-if="!hasActiveSession || !activeSession"
-        class="flex flex-col items-center justify-center h-full text-gray-500"
+        class="empty-state flex flex-col items-center justify-center h-full"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
-          class="h-16 w-16 mb-4 text-gray-600"
+          class="h-16 w-16 mb-4 empty-state__icon"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -113,9 +121,28 @@ watch(() => sessionStore.activeSessionId, () => {
             d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
           />
         </svg>
-        <p class="text-lg mb-2">暂无终端会话</p>
-        <p class="text-sm text-gray-600">从左侧连接列表选择一个连接以打开终端</p>
+        <p class="empty-state__title text-lg mb-2">暂无终端会话</p>
+        <p class="empty-state__desc text-sm">从左侧连接列表选择一个连接以打开终端</p>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.shell-panel {
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+.empty-state {
+  color: var(--color-text-secondary);
+}
+
+.empty-state__icon {
+  color: var(--color-text-muted);
+}
+
+.empty-state__desc {
+  color: var(--color-text-muted);
+}
+</style>
