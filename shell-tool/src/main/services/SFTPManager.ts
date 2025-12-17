@@ -1,5 +1,6 @@
 import { Client, SFTPWrapper } from 'ssh2'
 import { promises as fs } from 'fs'
+import { createReadStream, createWriteStream } from 'fs'
 import { basename } from 'path'
 import type { FileItem, Connection } from '../../shared'
 import { getConnectionStore } from './ConnectionStore'
@@ -123,7 +124,7 @@ export class SFTPManager {
     const filename = basename(localPath)
 
     await new Promise<void>((resolve, reject) => {
-      const readStream = fs.createReadStream(localPath)
+      const readStream = createReadStream(localPath)
       const writeStream = sftp.createWriteStream(remotePath)
       let transferred = 0
 
@@ -153,7 +154,7 @@ export class SFTPManager {
       sftp.stat(remotePath, (err, stats) => {
         const total = !err ? stats.size : 0
         const readStream = sftp.createReadStream(remotePath)
-        const writeStream = fs.createWriteStream(localPath)
+        const writeStream = createWriteStream(localPath)
         let transferred = 0
 
         readStream.on('data', (chunk) => {
@@ -168,6 +169,116 @@ export class SFTPManager {
         readStream.on('error', reject)
 
         readStream.pipe(writeStream)
+      })
+    })
+  }
+
+  private async deleteFile(sftp: SFTPWrapper, remotePath: string): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+      sftp.unlink(remotePath, (err) => {
+        if (err) {
+          // 提供更详细的错误信息
+          if (err.code === 2) {
+            reject(new Error(`文件不存在: ${remotePath}`))
+          } else {
+            reject(new Error(`删除文件失败: ${err.message}`))
+          }
+          return
+        }
+        resolve()
+      })
+    })
+  }
+
+  private async deleteDirectoryRecursive(sftp: SFTPWrapper, remotePath: string): Promise<void> {
+    // 规范化路径
+    const normalizedPath = remotePath.replace(/\/$/, '')
+    
+    // 先读取目录内容
+    const list = await new Promise<any[]>((resolve, reject) => {
+      sftp.readdir(normalizedPath, (err, entries) => {
+        if (err) {
+          reject(new Error(`无法读取目录: ${err.message}`))
+          return
+        }
+        resolve(entries)
+      })
+    })
+
+    // 逐个删除子文件/子目录
+    for (const entry of list) {
+      // 使用原始文件名，确保特殊字符正确传递
+      const childPath = `${normalizedPath}/${entry.filename}`
+      const isDir = entry.longname?.startsWith('d')
+      if (isDir) {
+        await this.deleteDirectoryRecursive(sftp, childPath)
+      } else {
+        await this.deleteFile(sftp, childPath)
+      }
+    }
+
+    // 删除当前目录本身
+    await new Promise<void>((resolve, reject) => {
+      sftp.rmdir(normalizedPath, (err) => {
+        if (err) {
+          if (err.code === 2) {
+            reject(new Error(`目录不存在: ${normalizedPath}`))
+          } else {
+            reject(new Error(`删除目录失败: ${err.message}`))
+          }
+          return
+        }
+        resolve()
+      })
+    })
+  }
+
+  async delete(connectionId: string, remotePath: string): Promise<void> {
+    const { sftp } = await this.ensureConnection(connectionId)
+
+    // 规范化路径，确保正确处理特殊字符
+    let normalizedPath = remotePath.trim()
+    
+    // 规范化路径分隔符（统一使用 /，移除多余的 /）
+    normalizedPath = normalizedPath.replace(/\\/g, '/').replace(/\/+/g, '/')
+    
+    // 确保路径以 / 开头（绝对路径）
+    if (!normalizedPath.startsWith('/')) {
+      normalizedPath = '/' + normalizedPath
+    }
+
+    // 先 stat 判断是文件还是目录，同时检查文件是否存在
+    const stats: any = await new Promise((resolve, reject) => {
+      sftp.stat(normalizedPath, (err, stats) => {
+        if (err) {
+          // 如果文件不存在，提供更友好的错误信息
+          if (err.code === 2) {
+            reject(new Error(`文件或目录不存在: ${normalizedPath}`))
+          } else {
+            reject(new Error(`无法访问文件或目录: ${err.message}`))
+          }
+          return
+        }
+        resolve(stats)
+      })
+    })
+
+    if (typeof stats.isDirectory === 'function' && stats.isDirectory()) {
+      await this.deleteDirectoryRecursive(sftp, normalizedPath)
+    } else {
+      await this.deleteFile(sftp, normalizedPath)
+    }
+  }
+
+  async chmod(connectionId: string, remotePath: string, mode: number): Promise<void> {
+    const { sftp } = await this.ensureConnection(connectionId)
+    await new Promise<void>((resolve, reject) => {
+      sftp.chmod(remotePath, mode, (err) => {
+        if (err) {
+          reject(err)
+          return
+        }
+        resolve()
       })
     })
   }

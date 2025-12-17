@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import type { Connection } from '../../../shared'
+import ContextMenu, { type ContextMenuItem } from './ContextMenu.vue'
 
 /**
  * ConnectionList.vue - 连接列表组件
@@ -64,34 +65,37 @@ function hideContextMenu(): void {
   menuConnectionId.value = null
 }
 
-function handleGlobalClick(): void {
-  if (showMenu.value) {
-    hideContextMenu()
-  }
-}
+// 右键菜单项计算
+const contextMenuItems = computed<ContextMenuItem[]>(() => {
+  if (!menuConnectionId.value) return []
 
-function handleEdit(id: string): void {
-  emit('edit', id)
-  hideContextMenu()
-}
-
-function handleOpenFromMenu(id: string): void {
-  emit('open', id)
-  hideContextMenu()
-}
-
-function handleDeleteFromMenu(id: string): void {
-  emit('delete', id)
-  hideContextMenu()
-}
-
-onMounted(() => {
-  window.addEventListener('click', handleGlobalClick)
+  return [
+    {
+      label: '打开',
+      action: () => {
+        emit('open', menuConnectionId.value!)
+      }
+    },
+    {
+      label: '编辑',
+      action: () => {
+        emit('edit', menuConnectionId.value!)
+      }
+    },
+    { label: '', divider: true },
+    {
+      label: '删除',
+      action: () => {
+        const connection = props.connections.find(c => c.id === menuConnectionId.value)
+        const connectionName = connection?.name || '连接'
+        if (window.confirm(`确定要删除连接 "${connectionName}" 吗？`)) {
+          emit('delete', menuConnectionId.value!)
+        }
+      }
+    }
+  ]
 })
 
-onBeforeUnmount(() => {
-  window.removeEventListener('click', handleGlobalClick)
-})
 
 function isSelected(id: string): boolean {
   return props.selectedId === id
@@ -211,32 +215,13 @@ function isSelected(id: string): boolean {
     </div>
 
     <!-- 右键菜单 -->
-    <div
-      v-if="showMenu && menuConnectionId"
-      class="context-menu fixed z-50 rounded shadow-lg w-40 py-1"
-      :style="{ top: `${menuY}px`, left: `${menuX}px` }"
-      @contextmenu.prevent
-    >
-      <button
-        class="context-menu__item w-full text-left px-3 py-2 text-sm transition-colors"
-        @click="handleOpenFromMenu(menuConnectionId)"
-      >
-        打开
-      </button>
-      <button
-        class="context-menu__item w-full text-left px-3 py-2 text-sm transition-colors"
-        @click="handleEdit(menuConnectionId)"
-      >
-        编辑
-      </button>
-      <div class="context-menu__divider" />
-      <button
-        class="context-menu__item w-full text-left px-3 py-2 text-sm transition-colors"
-        @click="handleDeleteFromMenu(menuConnectionId)"
-      >
-        删除
-      </button>
-    </div>
+    <ContextMenu
+      :visible="showMenu"
+      :x="menuX"
+      :y="menuY"
+      :items="contextMenuItems"
+      @close="hideContextMenu"
+    />
   </div>
 </template>
 
@@ -323,24 +308,4 @@ function isSelected(id: string): boolean {
   color: #ffffff;
 }
 
-.context-menu {
-  background-color: var(--color-menu-bg);
-  color: var(--color-text-primary);
-  border: 1px solid var(--color-border);
-  box-shadow: 0 12px 32px var(--color-shadow);
-}
-
-.context-menu__item {
-  color: inherit;
-}
-
-.context-menu__item:hover {
-  background: var(--color-menu-hover);
-}
-
-.context-menu__divider {
-  height: 1px;
-  margin: 4px 0;
-  background: var(--color-border);
-}
 </style>

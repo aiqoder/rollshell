@@ -78,7 +78,14 @@ export const IPC_CHANNELS = {
   FILE_LIST: 'file:list',
   FILE_UPLOAD: 'file:upload',
   FILE_DOWNLOAD: 'file:download',
-  FILE_PROGRESS: 'file:progress'
+  FILE_PROGRESS: 'file:progress',
+  FILE_DELETE: 'file:delete',
+  FILE_CHMOD: 'file:chmod',
+
+  // ZMODEM 相关通道
+  ZMODEM_PROGRESS: 'zmodem:progress',
+  ZMODEM_COMPLETE: 'zmodem:complete',
+  ZMODEM_ERROR: 'zmodem:error'
 } as const
 
 /**
@@ -91,6 +98,9 @@ export interface IPCMainToRenderer {
     connectionId: string,
     payload: { type: 'upload' | 'download'; path: string; filename: string; percent: number }
   ) => void
+  'zmodem:progress': (sessionId: string, progress: ZMODEMProgress) => void
+  'zmodem:complete': (sessionId: string) => void
+  'zmodem:error': (sessionId: string, error: string) => void
 }
 
 /**
@@ -114,6 +124,8 @@ export interface IPCRendererToMain {
     remotePath: string
   ) => Promise<void>
   'file:download': (connectionId: string, remotePath: string, localPath: string) => Promise<void>
+  'file:delete': (connectionId: string, remotePath: string) => Promise<void>
+  'file:chmod': (connectionId: string, remotePath: string, mode: number) => Promise<void>
 }
 
 export interface FileItem {
@@ -122,6 +134,17 @@ export interface FileItem {
   isDirectory: boolean
   size: number
   modifiedAt?: Date
+}
+
+/**
+ * ZMODEM 传输进度信息
+ */
+export interface ZMODEMProgress {
+  mode: 'upload' | 'download' // rz=upload, sz=download
+  filename: string
+  percent: number
+  transferred: number // bytes
+  total: number // bytes
 }
 
 /**

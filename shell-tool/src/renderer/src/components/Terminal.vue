@@ -4,6 +4,8 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { useThemeStore } from '../stores/themeStore'
+import ContextMenu, { type ContextMenuItem } from './ContextMenu.vue'
+import { message } from '../utils/message'
 
 /**
  * Terminal.vue - 终端组件
@@ -34,16 +36,18 @@ let resizeObserver: ResizeObserver | null = null
 let selectionListener: { dispose: () => void } | null = null
 let dataUnsubscribe: (() => void) | null = null
 let exitUnsubscribe: (() => void) | null = null
+let zmodemProgressUnsubscribe: (() => void) | null = null
+let zmodemCompleteUnsubscribe: (() => void) | null = null
+let zmodemErrorUnsubscribe: (() => void) | null = null
 let connectingTimer: number | null = null
 let connectingSeconds = 0
+let progressLine: number | null = null // 进度显示行号
 const themeStore = useThemeStore()
 const terminalTheme = computed(() => themeStore.getTerminalTheme())
 const hasSelection = ref(false)
-const contextMenuState = ref<{ visible: boolean; x: number; y: number }>({
-  visible: false,
-  x: 0,
-  y: 0
-})
+const contextMenuVisible = ref(false)
+const contextMenuX = ref(0)
+const contextMenuY = ref(0)
 
 function startConnectingTimer(): void {
   if (!terminal) return
@@ -91,6 +95,28 @@ function setupSSHBindings(): void {
       terminal.write(`\r\n\x1b[33m[进程已退出，退出码: ${code}]\x1b[0m\r\n`)
     }
   })
+
+  // ZMODEM 进度监听
+  if (window.shellTool?.zmodem) {
+    zmodemProgressUnsubscribe = window.shellTool.zmodem.onProgress((sessionId, progress) => {
+      if (sessionId === props.sshSessionId && terminal) {
+        displayZMODEMProgress(progress)
+      }
+    })
+
+    zmodemCompleteUnsubscribe = window.shellTool.zmodem.onComplete((sessionId) => {
+      if (sessionId === props.sshSessionId && terminal) {
+        clearZMODEMProgress()
+      }
+    })
+
+    zmodemErrorUnsubscribe = window.shellTool.zmodem.onError((sessionId, error) => {
+      if (sessionId === props.sshSessionId && terminal) {
+        clearZMODEMProgress()
+        terminal.write(`\r\n\x1b[31m[ZMODEM 错误: ${error}]\x1b[0m\r\n`)
+      }
+    })
+  }
 }
 
 // Initialize terminal
@@ -180,6 +206,19 @@ function cleanupTerminal(): void {
     exitUnsubscribe()
     exitUnsubscribe = null
   }
+  if (zmodemProgressUnsubscribe) {
+    zmodemProgressUnsubscribe()
+    zmodemProgressUnsubscribe = null
+  }
+  if (zmodemCompleteUnsubscribe) {
+    zmodemCompleteUnsubscribe()
+    zmodemCompleteUnsubscribe = null
+  }
+  if (zmodemErrorUnsubscribe) {
+    zmodemErrorUnsubscribe()
+    zmodemErrorUnsubscribe = null
+  }
+  clearZMODEMProgress()
   if (resizeObserver) {
     resizeObserver.disconnect()
     resizeObserver = null
@@ -190,7 +229,6 @@ function cleanupTerminal(): void {
   }
   fitAddon = null
   stopConnectingTimer()
-  pendingEcho = ''
 }
 
 function applyTerminalTheme(): void {
@@ -212,8 +250,43 @@ function refreshSelectionState(): void {
   hasSelection.value = !!terminal?.getSelection()
 }
 
+/**
+ * 显示 ZMODEM 传输进度
+ */
+function displayZMODEMProgress(progress: any): void {
+  if (!terminal) return
+
+  const modeText = progress.mode === 'upload' ? '上传' : '下载'
+  const transferredMB = (progress.transferred / 1024 / 1024).toFixed(2)
+  const totalMB = (progress.total / 1024 / 1024).toFixed(2)
+  const percent = progress.percent.toFixed(1)
+
+  // 格式化进度文本
+  const progressText = `[ZMODEM] ${modeText} ${progress.filename}: ${percent}% (${transferredMB}MB/${totalMB}MB)`
+
+  // 如果已有进度行，覆盖写入；否则新行
+  if (progressLine !== null) {
+    // 移动到进度行，清除并写入
+    terminal.write(`\r\x1b[K${progressText}`)
+  } else {
+    // 新行显示进度
+    terminal.write(`\r\n${progressText}`)
+    progressLine = terminal.rows
+  }
+}
+
+/**
+ * 清除 ZMODEM 进度显示
+ */
+function clearZMODEMProgress(): void {
+  if (progressLine !== null && terminal) {
+    terminal.write('\r\n')
+    progressLine = null
+  }
+}
+
 function hideContextMenu(): void {
-  contextMenuState.value.visible = false
+  contextMenuVisible.value = false
 }
 
 async function copySelection(): Promise<void> {
@@ -223,10 +296,10 @@ async function copySelection(): Promise<void> {
   if (!text) return
   try {
     await navigator.clipboard.writeText(text)
+    message.success('已复制到剪贴板')
   } catch (error) {
     console.error('[Terminal] 写入剪贴板失败', error)
-  } finally {
-    hideContextMenu()
+    message.error('复制失败')
   }
 }
 
@@ -241,10 +314,10 @@ async function pasteFromClipboard(): Promise<void> {
   try {
     const text = await navigator.clipboard.readText()
     sendInput(text)
+    message.success('已粘贴')
   } catch (error) {
     console.error('[Terminal] 读取剪贴板失败', error)
-  } finally {
-    hideContextMenu()
+    message.error('粘贴失败')
   }
 }
 
@@ -254,8 +327,8 @@ function pasteSelection(): void {
   const text = terminal?.getSelection()
   if (text) {
     sendInput(text)
+    message.success('已粘贴选中内容')
   }
-  hideContextMenu()
 }
 
 function clearTerminal(): void {
@@ -264,28 +337,47 @@ function clearTerminal(): void {
   if (props.status === 'connected' && props.sshSessionId) {
     window.shellTool?.ssh?.write(props.sshSessionId, 'clear\n')
   }
-  hideContextMenu()
 }
 
 function handleContextMenu(event: MouseEvent): void {
   event.preventDefault()
   refreshSelectionState()
-  contextMenuState.value = {
-    visible: true,
-    x: event.clientX,
-    y: event.clientY
-  }
+  contextMenuX.value = event.clientX
+  contextMenuY.value = event.clientY
+  contextMenuVisible.value = true
 }
+
+// 右键菜单项计算
+const contextMenuItems = computed<ContextMenuItem[]>(() => {
+  return [
+    {
+      label: '复制',
+      disabled: !hasSelection.value,
+      action: copySelection
+    },
+    {
+      label: '粘贴',
+      action: pasteFromClipboard
+    },
+    {
+      label: '粘贴选中',
+      disabled: !hasSelection.value,
+      action: pasteSelection
+    },
+    {
+      label: '清空缓存',
+      action: clearTerminal
+    }
+  ]
+})
 
 // Lifecycle
 onMounted(() => {
   initTerminal()
-  document.addEventListener('click', hideContextMenu)
 })
 
 onUnmounted(() => {
   cleanupTerminal()
-  document.removeEventListener('click', hideContextMenu)
 })
 
 // Watch for sshSessionId changes (session switch)
@@ -328,18 +420,13 @@ watch(terminalTheme, () => {
       class="terminal-container w-full h-full"
     />
 
-    <div
-      v-if="contextMenuState.visible"
-      class="terminal-context-menu"
-      :style="{ top: `${contextMenuState.y}px`, left: `${contextMenuState.x}px` }"
-      @click.stop
-      @contextmenu.prevent
-    >
-      <button class="ctx-item" :disabled="!hasSelection" @click="copySelection">复制</button>
-      <button class="ctx-item" @click="pasteFromClipboard">粘贴</button>
-      <button class="ctx-item" :disabled="!hasSelection" @click="pasteSelection">粘贴选中</button>
-      <button class="ctx-item" @click="clearTerminal">清空缓存</button>
-    </div>
+    <ContextMenu
+      :visible="contextMenuVisible"
+      :x="contextMenuX"
+      :y="contextMenuY"
+      :items="contextMenuItems"
+      @close="hideContextMenu"
+    />
   </div>
 </template>
 
@@ -364,34 +451,4 @@ watch(terminalTheme, () => {
   overflow-y: auto;
 }
 
-.terminal-context-menu {
-  position: fixed;
-  z-index: 20;
-  background: var(--color-surface, #2d2d3a);
-  border: 1px solid var(--color-border-strong, #444);
-  border-radius: 6px;
-  padding: 6px 0;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
-  min-width: 140px;
-}
-
-.ctx-item {
-  width: 100%;
-  padding: 8px 14px;
-  text-align: left;
-  color: var(--color-text-primary, #f5f5f5);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  font-size: 13px;
-}
-
-.ctx-item:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.ctx-item:disabled {
-  color: var(--color-text-muted, #7a7a84);
-  cursor: not-allowed;
-}
 </style>

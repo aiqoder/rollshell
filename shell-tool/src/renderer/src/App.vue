@@ -5,11 +5,12 @@ import ConnectionList from './components/ConnectionList.vue'
 import FilePanel from './components/FilePanel.vue'
 import AddConnectionDialog from './components/AddConnectionDialog.vue'
 import ShellPanel from './components/ShellPanel.vue'
+import Message from './components/Message.vue'
 import { useConnectionStore } from './stores/connectionStore'
 import { useSessionStore } from './stores/sessionStore'
 import { useThemeStore } from './stores/themeStore'
 import { ServerIcon, FolderIcon } from '@heroicons/vue/24/outline'
-import type { Connection } from '../shared'
+import type { Connection } from '../../shared'
 
 /**
  * App.vue - 主布局组件
@@ -245,6 +246,9 @@ function handleThemeToggle(): void {
       @close="handleAddDialogClose"
       @submit="handleAddConnectionSubmit"
     />
+
+    <!-- 全局消息提示组件 -->
+    <Message />
   </div>
 </template>
 

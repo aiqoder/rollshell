@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
+import { computed, ref } from 'vue'
 import type { Tab } from '../../../shared'
+import ContextMenu, { type ContextMenuItem } from './ContextMenu.vue'
 
 /**
  * TabBar.vue - 标签栏组件
@@ -54,43 +55,49 @@ function hideContextMenu(): void {
   menuTabId.value = null
 }
 
-function handleDuplicate(): void {
-  if (!menuTabId.value) return
-  emit('duplicate', menuTabId.value)
-  hideContextMenu()
-}
+// 右键菜单项计算
+const contextMenuItems = computed<ContextMenuItem[]>(() => {
+  if (!menuTabId.value) return []
 
-function handleCloseFromMenu(): void {
-  if (!menuTabId.value) return
-  emit('close', menuTabId.value)
-  hideContextMenu()
-}
-
-function handleConnectFromMenu(): void {
-  if (!menuTabId.value || !canConnect.value) return
-  emit('connect', menuTabId.value)
-  hideContextMenu()
-}
-
-function handleDisconnectFromMenu(): void {
-  if (!menuTabId.value || !canDisconnect.value) return
-  emit('disconnect', menuTabId.value)
-  hideContextMenu()
-}
-
-function handleGlobalClick(): void {
-  if (showMenu.value) {
-    hideContextMenu()
-  }
-}
-
-onMounted(() => {
-  window.addEventListener('click', handleGlobalClick)
+  return [
+    {
+      label: '连接',
+      disabled: !canConnect.value,
+      action: () => {
+        if (menuTabId.value && canConnect.value) {
+          emit('connect', menuTabId.value)
+        }
+      }
+    },
+    {
+      label: '断开',
+      disabled: !canDisconnect.value,
+      action: () => {
+        if (menuTabId.value && canDisconnect.value) {
+          emit('disconnect', menuTabId.value)
+        }
+      }
+    },
+    { label: '', divider: true },
+    {
+      label: '复制标签',
+      action: () => {
+        if (menuTabId.value) {
+          emit('duplicate', menuTabId.value)
+        }
+      }
+    },
+    {
+      label: '关闭',
+      action: () => {
+        if (menuTabId.value) {
+          emit('close', menuTabId.value)
+        }
+      }
+    }
+  ]
 })
 
-onBeforeUnmount(() => {
-  window.removeEventListener('click', handleGlobalClick)
-})
 
 // Methods
 function handleSelect(tabId: string): void {
@@ -173,40 +180,13 @@ function isActive(tabId: string): boolean {
     </div>
 
     <!-- 右键菜单 -->
-    <div
-      v-if="showMenu && menuTabId"
-      class="context-menu fixed z-50 rounded shadow-lg w-40 py-1"
-      :style="{ top: `${menuY}px`, left: `${menuX}px` }"
-      @contextmenu.prevent
-    >
-      <button
-        class="context-menu__item w-full text-left px-3 py-2 text-sm transition-colors"
-        :disabled="!canConnect"
-        @click="handleConnectFromMenu"
-      >
-        连接
-      </button>
-      <button
-        class="context-menu__item w-full text-left px-3 py-2 text-sm transition-colors"
-        :disabled="!canDisconnect"
-        @click="handleDisconnectFromMenu"
-      >
-        断开
-      </button>
-      <div class="context-menu__divider" />
-      <button
-        class="context-menu__item w-full text-left px-3 py-2 text-sm transition-colors"
-        @click="handleDuplicate"
-      >
-        复制标签
-      </button>
-      <button
-        class="context-menu__item w-full text-left px-3 py-2 text-sm transition-colors"
-        @click="handleCloseFromMenu"
-      >
-        关闭
-      </button>
-    </div>
+    <ContextMenu
+      :visible="showMenu"
+      :x="menuX"
+      :y="menuY"
+      :items="contextMenuItems"
+      @close="hideContextMenu"
+    />
 
   </div>
 </template>
@@ -252,31 +232,4 @@ function isActive(tabId: string): boolean {
   color: var(--color-text-primary);
 }
 
-.context-menu {
-  background-color: var(--color-menu-bg);
-  color: var(--color-text-primary);
-  border: 1px solid var(--color-border);
-  box-shadow: 0 12px 32px var(--color-shadow);
-  backdrop-filter: blur(10px);
-}
-
-.context-menu__item {
-  color: inherit;
-}
-
-.context-menu__item:hover {
-  background: var(--color-menu-hover);
-}
-
-.context-menu__item:disabled {
-  color: var(--color-text-muted);
-  cursor: not-allowed;
-  background: transparent;
-}
-
-.context-menu__divider {
-  height: 1px;
-  margin: 4px 0;
-  background: var(--color-border);
-}
 </style>

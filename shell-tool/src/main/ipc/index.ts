@@ -191,10 +191,13 @@ function registerFileHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.FILE_DOWNLOAD,
     async (event, connectionId: string, remotePath: string, suggestedName?: string) => {
-      const browserWindow = BrowserWindow.fromWebContents(event.sender) || undefined
-      const result = await dialog.showSaveDialog(browserWindow, {
+      const browserWindow = BrowserWindow.fromWebContents(event.sender)
+      const dialogOptions: Electron.SaveDialogOptions = {
         defaultPath: suggestedName ?? undefined
-      })
+      }
+      const result = browserWindow
+        ? await dialog.showSaveDialog(browserWindow, dialogOptions)
+        : await dialog.showSaveDialog(dialogOptions)
       if (result.canceled || !result.filePath) return
 
       const localPath = result.filePath
@@ -212,6 +215,32 @@ function registerFileHandlers(): void {
           })
         }
       )
+    }
+  )
+
+  // 删除
+  ipcMain.handle(
+    IPC_CHANNELS.FILE_DELETE,
+    async (_event, connectionId: string, remotePath: string) => {
+      try {
+        await sftpManager.delete(connectionId, remotePath)
+      } catch (error) {
+        console.error('[IPC] file:delete 错误:', error)
+        throw error
+      }
+    }
+  )
+
+  // 修改权限
+  ipcMain.handle(
+    IPC_CHANNELS.FILE_CHMOD,
+    async (_event, connectionId: string, remotePath: string, mode: number) => {
+      try {
+        await sftpManager.chmod(connectionId, remotePath, mode)
+      } catch (error) {
+        console.error('[IPC] file:chmod 错误:', error)
+        throw error
+      }
     }
   )
 }

@@ -70,8 +70,10 @@ export const useFileStore = defineStore('file', () => {
     }
   }
 
-  async function download(remotePath: string, suggestedName?: string): Promise<void> {
-    if (!currentConnectionId.value) return
+  async function download(remotePath: string, suggestedName?: string): Promise<{ success: boolean; message: string }> {
+    if (!currentConnectionId.value) {
+      return { success: false, message: '未选择连接' }
+    }
     transferProgress.value = {
       type: 'download',
       path: remotePath,
@@ -84,10 +86,44 @@ export const useFileStore = defineStore('file', () => {
         remotePath,
         suggestedName
       )
+      return { success: true, message: '下载成功' }
     } catch (e) {
-      error.value = e instanceof Error ? e.message : '下载失败'
+      const errorMsg = e instanceof Error ? e.message : '下载失败'
+      error.value = errorMsg
+      return { success: false, message: errorMsg }
     } finally {
       transferProgress.value = null
+    }
+  }
+
+  async function deleteFile(remotePath: string): Promise<{ success: boolean; message: string }> {
+    if (!currentConnectionId.value) {
+      return { success: false, message: '未选择连接' }
+    }
+    try {
+      await window.shellTool?.file.delete(currentConnectionId.value, remotePath)
+      await load()
+      return { success: true, message: '删除成功' }
+    } catch (e) {
+      const errorMsg = e instanceof Error ? e.message : '删除失败'
+      error.value = errorMsg
+      return { success: false, message: errorMsg }
+    }
+  }
+
+  async function chmod(remotePath: string, mode: string): Promise<{ success: boolean; message: string }> {
+    if (!currentConnectionId.value) {
+      return { success: false, message: '未选择连接' }
+    }
+    try {
+      // 将字符串模式转换为数字（例如 "755" -> 493）
+      const modeNum = parseInt(mode, 8)
+      await window.shellTool?.file.chmod(currentConnectionId.value, remotePath, modeNum)
+      return { success: true, message: '权限设置成功' }
+    } catch (e) {
+      const errorMsg = e instanceof Error ? e.message : '权限设置失败'
+      error.value = errorMsg
+      return { success: false, message: errorMsg }
     }
   }
 
@@ -120,6 +156,8 @@ export const useFileStore = defineStore('file', () => {
     load,
     upload,
     download,
+    deleteFile,
+    chmod,
     handleProgress,
     goParent
   }

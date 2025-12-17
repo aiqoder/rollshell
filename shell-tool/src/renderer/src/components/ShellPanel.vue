@@ -39,8 +39,10 @@ const tabsWithNames = computed(() => {
   })
 })
 
-const sessionStatusMap = computed<Record<string, string | undefined>>(() => {
-  const map: Record<string, string | undefined> = {}
+type SessionStatus = 'connecting' | 'connected' | 'failed' | undefined
+
+const sessionStatusMap = computed<Record<string, SessionStatus>>(() => {
+  const map: Record<string, SessionStatus> = {}
   sessionStore.sessions.forEach((session) => {
     map[session.id] = session.status
   })
@@ -88,12 +90,14 @@ async function handleTabDisconnect(tabId: string): Promise<void> {
 // Focus terminal when session changes
 watch(() => sessionStore.activeSessionId, () => {
   const id = sessionStore.activeSessionId
-  const session = id ? sessionStore.getSessionById(id) : null
-  if (session) {
-    fileStore.setConnection(session.connectionId, '~')
-    fileStore.load(fileStore.currentPath)
-    const term = terminalRefs.value[id]
-    term?.focus()
+  if (id) {
+    const session = sessionStore.getSessionById(id)
+    if (session) {
+      fileStore.setConnection(session.connectionId, '~')
+      fileStore.load(fileStore.currentPath)
+      const term = terminalRefs.value[id]
+      term?.focus()
+    }
   } else {
     fileStore.setConnection(null)
   }

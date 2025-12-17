@@ -1,12 +1,28 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useFileStore } from '../stores'
+import ContextMenu, { type ContextMenuItem } from './ContextMenu.vue'
+import { message } from '../utils/message'
 
 const fileStore = useFileStore()
 const selectedPath = ref<string | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 
+// 右键菜单状态
+const showContextMenu = ref(false)
+const contextMenuX = ref(0)
+const contextMenuY = ref(0)
+const contextMenuPath = ref<string | null>(null)
+const contextMenuItem = ref<{ isDirectory: boolean; path: string } | null>(null)
+
+// 权限设置对话框状态
+const showPermissionDialog = ref(false)
+const permissionMode = ref('755')
+const permissionDialogPath = ref<string | null>(null)
+
 let unsubscribeProgress: (() => void) | null = null
+
+const canGoParent = computed(() => fileStore.currentPath !== '/')
 
 onMounted(() => {
   if (!unsubscribeProgress && window.shellTool?.file.onProgress) {
@@ -23,6 +39,11 @@ onUnmounted(() => {
 
 function handleRefresh(): void {
   fileStore.load()
+}
+
+function handleGoParent(): void {
+  fileStore.goParent()
+  selectedPath.value = null
 }
 
 function handleRowDblClick(item: { isDirectory: boolean; path: string }): void {
@@ -48,15 +69,127 @@ function onFileChange(event: Event): void {
   if (!input.files || input.files.length === 0) return
   const file = input.files[0]
   const remotePath = `${fileStore.currentPath.replace(/[/\\]$/, '')}/${file.name}`
-  fileStore.upload(file.path, remotePath)
+  const filePath = (file as any).path as string | undefined
+  if (!filePath) {
+    console.error('[FilePanel] 选中文件缺少 path 属性，无法上传')
+    input.value = ''
+    return
+  }
+  fileStore.upload(filePath, remotePath)
   input.value = ''
 }
 
-function handleDownload(): void {
+async function handleDownload(): Promise<void> {
   if (!selectedPath.value) return
   const filename = selectedPath.value.split('/').pop()
-  fileStore.download(selectedPath.value, filename)
+  const result = await fileStore.download(selectedPath.value, filename)
+  if (result.success) {
+    message.success(result.message)
+  } else {
+    message.error(result.message)
+  }
 }
+
+function openContextMenu(event: MouseEvent, item: { isDirectory: boolean; path: string }): void {
+  event.preventDefault()
+  contextMenuPath.value = item.path
+  contextMenuItem.value = item
+  contextMenuX.value = event.clientX
+  contextMenuY.value = event.clientY
+  showContextMenu.value = true
+}
+
+function hideContextMenu(): void {
+  showContextMenu.value = false
+  contextMenuPath.value = null
+  contextMenuItem.value = null
+}
+
+// 右键菜单项计算
+const contextMenuItems = computed<ContextMenuItem[]>(() => {
+  if (!contextMenuPath.value || !contextMenuItem.value) return []
+
+  const items: ContextMenuItem[] = []
+  const item = contextMenuItem.value
+
+  // 只有文件才显示下载
+  if (!item.isDirectory) {
+    items.push({
+      label: '下载',
+      action: async () => {
+        if (!contextMenuPath.value) return
+        const filename = contextMenuPath.value.split('/').pop()
+        const result = await fileStore.download(contextMenuPath.value, filename)
+        if (result.success) {
+          message.success(result.message)
+        } else {
+          message.error(result.message)
+        }
+      }
+    })
+  }
+
+  items.push({
+    label: '权限设置',
+    action: () => {
+      if (!contextMenuPath.value) return
+      permissionDialogPath.value = contextMenuPath.value
+      permissionMode.value = '755'
+      showPermissionDialog.value = true
+    }
+  })
+
+  items.push({ label: '', divider: true })
+
+  items.push({
+    label: '删除',
+    action: async () => {
+      if (!contextMenuPath.value || !contextMenuItem.value) return
+      const deleteItem = contextMenuItem.value
+      const itemName = deleteItem.path.split('/').pop() || deleteItem.path
+      const confirmMessage = `确定要删除 ${deleteItem.isDirectory ? '目录' : '文件'} "${itemName}" 吗？`
+      if (!window.confirm(confirmMessage)) {
+        return
+      }
+      const result = await fileStore.deleteFile(contextMenuPath.value)
+      if (result.success) {
+        message.success(result.message)
+      } else {
+        message.error(result.message)
+      }
+    }
+  })
+
+  return items
+})
+
+async function handlePermissionSubmit(): Promise<void> {
+  if (!permissionDialogPath.value) return
+  const result = await fileStore.chmod(permissionDialogPath.value, permissionMode.value)
+  if (result.success) {
+    message.success(result.message)
+  } else {
+    message.error(result.message)
+  }
+  showPermissionDialog.value = false
+  permissionDialogPath.value = null
+}
+
+function handlePermissionCancel(): void {
+  showPermissionDialog.value = false
+  permissionDialogPath.value = null
+}
+
+
+onUnmounted(() => {
+  if (unsubscribeProgress) {
+    unsubscribeProgress()
+    unsubscribeProgress = null
+  }
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('click', hideContextMenu)
+  }
+})
 </script>
 
 <template>
@@ -65,9 +198,6 @@ function handleDownload(): void {
     <div class="file-panel__toolbar flex items-center justify-between px-3 py-1 border-b">
       <div class="flex flex-col">
         <span class="file-panel__title text-[11px]">远程文件</span>
-        <span class="file-panel__path text-[11px] truncate max-w-[180px]">
-          {{ fileStore.currentPath }}
-        </span>
       </div>
       <div class="flex items-center gap-1">
         <button
@@ -78,23 +208,10 @@ function handleDownload(): void {
         </button>
         <button
           class="file-panel__btn px-1.5 py-0.5 rounded border text-[11px]"
-          @click="fileStore.goParent"
-        >
-          上级
-        </button>
-        <button
-          class="file-panel__btn px-1.5 py-0.5 rounded border text-[11px]"
           :disabled="!fileStore.hasConnection"
           @click="triggerUpload"
         >
           上传
-        </button>
-        <button
-          class="file-panel__btn px-1.5 py-0.5 rounded border text-[11px] disabled:opacity-50"
-          :disabled="!selectedPath"
-          @click="handleDownload"
-        >
-          下载
         </button>
         <input ref="fileInput" type="file" class="hidden" @change="onFileChange" />
       </div>
@@ -118,7 +235,7 @@ function handleDownload(): void {
     </div>
 
     <!-- 文件列表 -->
-    <div class="flex-1 overflow-auto text-xs">
+    <div class="file-panel__list flex-1 text-xs">
       <div v-if="!fileStore.hasConnection" class="file-panel__tip h-full flex items-center justify-center">
         未选择会话
       </div>
@@ -132,27 +249,39 @@ function handleDownload(): void {
         <thead class="file-panel__head text-[11px]">
           <tr>
             <th class="px-3 py-1 text-left font-normal">名称</th>
-            <th class="px-2 py-1 w-20 text-right font-normal">大小</th>
             <th class="px-2 py-1 w-24 text-right font-normal">修改时间</th>
           </tr>
         </thead>
         <tbody>
+          <!-- 上级目录行 -->
+          <tr
+            v-if="canGoParent"
+            class="file-row cursor-default"
+            @click="handleGoParent"
+          >
+            <td class="px-3 py-1">
+              <span class="mr-2 text-[11px] file-row__icon w-4 inline-block text-center">📁</span>
+              <span class="truncate align-middle">..</span>
+            </td>
+            <td class="px-2 py-1 text-right text-[11px] file-row__meta" />
+          </tr>
           <tr
             v-for="item in fileStore.items"
             :key="item.path"
             :class="['file-row cursor-default', selectedPath === item.path ? 'is-selected' : '']"
             @click="handleSelect(item.path)"
             @dblclick="handleRowDblClick(item)"
+            @contextmenu="openContextMenu($event, item)"
           >
             <td class="px-3 py-1">
               <span class="mr-2 text-[11px] file-row__icon w-4 inline-block text-center">
                 {{ item.isDirectory ? '📁' : '📄' }}
               </span>
-              <span class="truncate align-middle">{{ item.name }}</span>
-            </td>
-            <td class="px-2 py-1 text-right tabular-nums">
-              <span v-if="!item.isDirectory">
-                {{ item.size }}
+              <span
+                class="file-row__name truncate align-middle"
+                :title="item.path"
+              >
+                {{ item.name }}
               </span>
             </td>
             <td class="px-2 py-1 text-right text-[11px] file-row__meta">
@@ -164,6 +293,64 @@ function handleDownload(): void {
         </tbody>
       </table>
     </div>
+    <!-- 底部路径行 -->
+    <div
+      v-if="fileStore.hasConnection"
+      class="file-panel__path-bar px-3 py-1 border-t text-[11px]"
+    >
+      <span
+        class="file-panel__path-bottom"
+        :title="fileStore.currentPath"
+      >
+        {{ fileStore.currentPath }}
+      </span>
+    </div>
+
+    <!-- 右键菜单 -->
+    <ContextMenu
+      :visible="showContextMenu"
+      :x="contextMenuX"
+      :y="contextMenuY"
+      :items="contextMenuItems"
+      @close="hideContextMenu"
+    />
+
+    <!-- 权限设置对话框 -->
+    <div
+      v-if="showPermissionDialog"
+      class="file-permission-dialog fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+      @click.self="handlePermissionCancel"
+    >
+      <div class="file-permission-dialog__content rounded shadow-lg p-4 min-w-[300px]">
+        <h3 class="file-permission-dialog__title text-sm font-semibold mb-3">设置权限</h3>
+        <div class="mb-3">
+          <label class="block text-xs mb-1">权限值（如：755）</label>
+          <input
+            v-model="permissionMode"
+            type="text"
+            class="file-permission-dialog__input w-full px-2 py-1 border rounded text-xs"
+            placeholder="755"
+            pattern="[0-7]{3,4}"
+            maxlength="4"
+          />
+        </div>
+        <div class="flex justify-end gap-2">
+          <button
+            class="file-permission-dialog__btn px-3 py-1 rounded text-xs"
+            @click="handlePermissionCancel"
+          >
+            取消
+          </button>
+          <button
+            class="file-permission-dialog__btn file-permission-dialog__btn--primary px-3 py-1 rounded text-xs"
+            @click="handlePermissionSubmit"
+          >
+            确定
+          </button>
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -223,6 +410,16 @@ function handleDownload(): void {
   color: var(--color-text-muted);
 }
 
+.file-panel__list {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.file-panel__list table {
+  width: 100%;
+  table-layout: fixed;
+}
+
 .file-panel__head {
   background: var(--color-surface-muted);
   color: var(--color-text-secondary);
@@ -258,6 +455,70 @@ function handleDownload(): void {
 .file-row.is-selected .file-row__icon,
 .file-row.is-selected .file-row__meta {
   color: #f1f5f9;
+}
+
+.file-row__name {
+  display: inline-block;
+  max-width: calc(100% - 20px);
+}
+
+.file-panel__path-bar {
+  border-color: var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+}
+
+.file-panel__path-bottom {
+  display: block;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+
+.file-permission-dialog__content {
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+}
+
+.file-permission-dialog__title {
+  color: var(--color-text-primary);
+}
+
+.file-permission-dialog__input {
+  background: var(--color-surface-muted);
+  border-color: var(--color-border);
+  color: var(--color-text-primary);
+}
+
+.file-permission-dialog__input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.file-permission-dialog__btn {
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.file-permission-dialog__btn:hover {
+  background: var(--color-surface-strong);
+  color: var(--color-text-primary);
+}
+
+.file-permission-dialog__btn--primary {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #ffffff;
+}
+
+.file-permission-dialog__btn--primary:hover {
+  background: var(--color-primary);
+  opacity: 0.9;
 }
 </style>
 

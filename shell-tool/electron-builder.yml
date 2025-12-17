@@ -9,8 +9,10 @@ files:
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - 'out/**/*'  # 包含所有构建输出文件
 asarUnpack:
   - resources/**
+  - out/libs/**/*  # 动态库需要解包（不能放在 asar 中）
 win:
   executableName: shell-tool
 nsis:

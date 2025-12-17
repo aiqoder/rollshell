@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import { IPC_CHANNELS, type Connection, type FileItem } from '../shared'
+import { IPC_CHANNELS, type Connection, type FileItem, type ZMODEMProgress } from '../shared'
 
 /**
  * Shell Tool API
@@ -86,6 +86,12 @@ const shellToolAPI = {
     ): Promise<void> => {
       return ipcRenderer.invoke(IPC_CHANNELS.FILE_DOWNLOAD, connectionId, remotePath, suggestedName)
     },
+    delete: (connectionId: string, remotePath: string): Promise<void> => {
+      return ipcRenderer.invoke(IPC_CHANNELS.FILE_DELETE, connectionId, remotePath)
+    },
+    chmod: (connectionId: string, remotePath: string, mode: number): Promise<void> => {
+      return ipcRenderer.invoke(IPC_CHANNELS.FILE_CHMOD, connectionId, remotePath, mode)
+    },
     onProgress: (
       callback: (
         connectionId: string,
@@ -99,6 +105,35 @@ const shellToolAPI = {
       ): void => callback(connectionId, payload)
       ipcRenderer.on(IPC_CHANNELS.FILE_PROGRESS, handler)
       return () => ipcRenderer.removeListener(IPC_CHANNELS.FILE_PROGRESS, handler)
+    }
+  },
+
+  /**
+   * ZMODEM 相关 API
+   */
+  zmodem: {
+    onProgress: (callback: (sessionId: string, progress: ZMODEMProgress) => void): (() => void) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        sessionId: string,
+        progress: ZMODEMProgress
+      ): void => callback(sessionId, progress)
+      ipcRenderer.on(IPC_CHANNELS.ZMODEM_PROGRESS, handler)
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.ZMODEM_PROGRESS, handler)
+    },
+    onComplete: (callback: (sessionId: string) => void): (() => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, sessionId: string): void => callback(sessionId)
+      ipcRenderer.on(IPC_CHANNELS.ZMODEM_COMPLETE, handler)
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.ZMODEM_COMPLETE, handler)
+    },
+    onError: (callback: (sessionId: string, error: string) => void): (() => void) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        sessionId: string,
+        error: string
+      ): void => callback(sessionId, error)
+      ipcRenderer.on(IPC_CHANNELS.ZMODEM_ERROR, handler)
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.ZMODEM_ERROR, handler)
     }
   }
 }
