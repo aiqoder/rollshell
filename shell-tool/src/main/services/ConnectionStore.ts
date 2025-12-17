@@ -98,19 +98,19 @@ export class ConnectionStore {
       throw new Error(`Connection with id ${id} not found`)
     }
 
-    // 如果更新名称，需要验证
-    if (data.name !== undefined) {
-      const validation = validateConnection({ name: data.name })
-      if (!validation.valid) {
-        throw new Error(`Invalid connection: ${validation.errors.join(', ')}`)
-      }
-    }
-
-    this.connections[index] = {
+    const mergedConnection: Connection = {
       ...this.connections[index],
       ...data,
       updatedAt: new Date()
     }
+
+    // 使用合并后的数据进行完整校验，避免缺少字段导致的误报
+    const validation = validateConnection(mergedConnection)
+    if (!validation.valid) {
+      throw new Error(`Invalid connection: ${validation.errors.join(', ')}`)
+    }
+
+    this.connections[index] = mergedConnection
 
     console.info('[ConnectionStore] 更新连接', { id })
     await this.persist()
