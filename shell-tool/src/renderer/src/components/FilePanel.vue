@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useFileStore } from '../stores'
 import ContextMenu, { type ContextMenuItem } from './ContextMenu.vue'
+import LoadInfo from './LoadInfo.vue'
 import { message } from '../utils/message'
 
 const fileStore = useFileStore()
@@ -69,7 +70,7 @@ function onFileChange(event: Event): void {
   if (!input.files || input.files.length === 0) return
   const file = input.files[0]
   const remotePath = `${fileStore.currentPath.replace(/[/\\]$/, '')}/${file.name}`
-  const filePath = (file as any).path as string | undefined
+  const filePath = (file as File & { path?: string }).path
   if (!filePath) {
     console.error('[FilePanel] 选中文件缺少 path 属性，无法上传')
     input.value = ''
@@ -180,7 +181,6 @@ function handlePermissionCancel(): void {
   permissionDialogPath.value = null
 }
 
-
 onUnmounted(() => {
   if (unsubscribeProgress) {
     unsubscribeProgress()
@@ -236,7 +236,10 @@ onUnmounted(() => {
 
     <!-- 文件列表 -->
     <div class="file-panel__list flex-1 text-xs">
-      <div v-if="!fileStore.hasConnection" class="file-panel__tip h-full flex items-center justify-center">
+      <div
+        v-if="!fileStore.hasConnection"
+        class="file-panel__tip h-full flex items-center justify-center"
+      >
         未选择会话
       </div>
       <div
@@ -254,11 +257,7 @@ onUnmounted(() => {
         </thead>
         <tbody>
           <!-- 上级目录行 -->
-          <tr
-            v-if="canGoParent"
-            class="file-row cursor-default"
-            @click="handleGoParent"
-          >
+          <tr v-if="canGoParent" class="file-row cursor-default" @click="handleGoParent">
             <td class="px-3 py-1">
               <span class="mr-2 text-[11px] file-row__icon w-4 inline-block text-center">📁</span>
               <span class="truncate align-middle">..</span>
@@ -277,10 +276,7 @@ onUnmounted(() => {
               <span class="mr-2 text-[11px] file-row__icon w-4 inline-block text-center">
                 {{ item.isDirectory ? '📁' : '📄' }}
               </span>
-              <span
-                class="file-row__name truncate align-middle"
-                :title="item.path"
-              >
+              <span class="file-row__name truncate align-middle" :title="item.path">
                 {{ item.name }}
               </span>
             </td>
@@ -294,17 +290,13 @@ onUnmounted(() => {
       </table>
     </div>
     <!-- 底部路径行 -->
-    <div
-      v-if="fileStore.hasConnection"
-      class="file-panel__path-bar px-3 py-1 border-t text-[11px]"
-    >
-      <span
-        class="file-panel__path-bottom"
-        :title="fileStore.currentPath"
-      >
+    <div v-if="fileStore.hasConnection" class="file-panel__path-bar px-3 py-1 border-t text-[11px]">
+      <span class="file-panel__path-bottom" :title="fileStore.currentPath">
         {{ fileStore.currentPath }}
       </span>
     </div>
+
+    <LoadInfo v-if="fileStore.hasConnection" class="border-t" :active="fileStore.hasConnection" />
 
     <!-- 右键菜单 -->
     <ContextMenu
@@ -350,7 +342,6 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
-
   </div>
 </template>
 
@@ -377,7 +368,10 @@ onUnmounted(() => {
   background: transparent;
   border-color: transparent;
   color: var(--color-text-secondary);
-  transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+  transition:
+    color 0.2s ease,
+    border-color 0.2s ease,
+    background-color 0.2s ease;
 }
 
 .file-panel__btn:hover {
@@ -476,7 +470,6 @@ onUnmounted(() => {
   text-overflow: ellipsis;
 }
 
-
 .file-permission-dialog__content {
   background: var(--color-surface);
   color: var(--color-text-primary);
@@ -502,7 +495,9 @@ onUnmounted(() => {
   background: var(--color-surface-muted);
   border: 1px solid var(--color-border);
   color: var(--color-text-secondary);
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
 }
 
 .file-permission-dialog__btn:hover {
@@ -521,4 +516,3 @@ onUnmounted(() => {
   opacity: 0.9;
 }
 </style>
-

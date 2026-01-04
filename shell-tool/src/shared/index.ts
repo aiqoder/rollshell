@@ -85,7 +85,10 @@ export const IPC_CHANNELS = {
   // ZMODEM 相关通道
   ZMODEM_PROGRESS: 'zmodem:progress',
   ZMODEM_COMPLETE: 'zmodem:complete',
-  ZMODEM_ERROR: 'zmodem:error'
+  ZMODEM_ERROR: 'zmodem:error',
+
+  // 系统信息
+  SYSTEM_GET_STATS: 'system:get-stats'
 } as const
 
 /**
@@ -126,6 +129,8 @@ export interface IPCRendererToMain {
   'file:download': (connectionId: string, remotePath: string, localPath: string) => Promise<void>
   'file:delete': (connectionId: string, remotePath: string) => Promise<void>
   'file:chmod': (connectionId: string, remotePath: string, mode: number) => Promise<void>
+
+  'system:get-stats': () => Promise<SystemStats>
 }
 
 export interface FileItem {
@@ -145,6 +150,15 @@ export interface ZMODEMProgress {
   percent: number
   transferred: number // bytes
   total: number // bytes
+}
+
+/**
+ * 系统负载信息
+ */
+export interface SystemStats {
+  cpu: number // CPU 占用百分比
+  memory: number // 内存占用百分比
+  swap: number // 交换分区占用百分比
 }
 
 /**

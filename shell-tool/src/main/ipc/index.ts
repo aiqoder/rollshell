@@ -6,6 +6,7 @@
 import { ipcMain, BrowserWindow, dialog } from 'electron'
 import { IPC_CHANNELS, type Connection, type FileItem } from '../../shared'
 import { getSSHManager, getConnectionStore, getSFTPManager } from '../services'
+import { getSystemStats } from '../services/SystemInfoService'
 
 function sanitizeConnectionPayload(connection: Partial<Connection>): Record<string, unknown> {
   return {
@@ -22,6 +23,7 @@ export function registerIPCHandlers(): void {
   registerSSHHandlers()
   registerConnectionHandlers()
   registerFileHandlers()
+  registerSystemHandlers()
 }
 
 /**
@@ -243,4 +245,18 @@ function registerFileHandlers(): void {
       }
     }
   )
+}
+
+/**
+ * 注册系统信息相关 IPC 处理器
+ */
+function registerSystemHandlers(): void {
+  ipcMain.handle(IPC_CHANNELS.SYSTEM_GET_STATS, async () => {
+    try {
+      return await getSystemStats()
+    } catch (error) {
+      console.error('[IPC][system:get-stats] 获取系统信息失败', error)
+      throw error
+    }
+  })
 }

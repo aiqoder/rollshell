@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import { IPC_CHANNELS, type Connection, type FileItem, type ZMODEMProgress } from '../shared'
+import { IPC_CHANNELS, type Connection, type FileItem, type SystemStats, type ZMODEMProgress } from '../shared'
 
 /**
  * Shell Tool API
@@ -134,6 +134,15 @@ const shellToolAPI = {
       ): void => callback(sessionId, error)
       ipcRenderer.on(IPC_CHANNELS.ZMODEM_ERROR, handler)
       return () => ipcRenderer.removeListener(IPC_CHANNELS.ZMODEM_ERROR, handler)
+    }
+  },
+
+  /**
+   * 系统信息
+   */
+  system: {
+    getStats: (): Promise<SystemStats> => {
+      return ipcRenderer.invoke(IPC_CHANNELS.SYSTEM_GET_STATS)
     }
   }
 }

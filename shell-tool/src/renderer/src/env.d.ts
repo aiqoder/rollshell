@@ -6,3 +6,9 @@ declare module '@heroicons/vue/24/outline' {
   export const FolderIcon: FunctionalComponent<SVGAttributes>
   export const ServerIcon: FunctionalComponent<SVGAttributes>
 }
+
+declare module '*.vue' {
+  import type { DefineComponent } from 'vue'
+  const component: DefineComponent<Record<string, unknown>, Record<string, unknown>, unknown>
+  export default component
+}
